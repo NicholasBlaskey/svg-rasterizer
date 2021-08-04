@@ -1,2 +1,4 @@
 github.com/nicholasblaskey/webgl v0.0.0-20210802020059-4d570b426294 h1:648iHutuOZpO1qg4nqaoKYOdJIilgNr14MsPhssC3/g=
 github.com/nicholasblaskey/webgl v0.0.0-20210802020059-4d570b426294/go.mod h1:mke0ezk096cTG1NeRBmLDoY0YVppD6djEJWKYrR3q0s=
+github.com/nicholasblaskey/webgl-utils v0.0.0-20210802220353-1ed78d904317 h1:DVd5icicXoIlA580fOebY7srfwWZH/OxiXDstAx/B9Q=
+github.com/nicholasblaskey/webgl-utils v0.0.0-20210802220353-1ed78d904317/go.mod h1:8PEPgzaf2jamUg8/9fCrFDAiHv9RuSVXx5x7JFdONFs=
