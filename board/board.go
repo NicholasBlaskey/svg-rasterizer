@@ -8,6 +8,24 @@ import (
 	"github.com/nicholasblaskey/webgl/webgl"
 )
 
+func initBuffer(gl *webgl.Gl, program *webgl.Program, attribute string, vertices []float32) {
+	vertexBuffer := gl.CreateBuffer()
+	if vertexBuffer == nil {
+		return
+	}
+
+	gl.BindBuffer(webgl.ARRAY_BUFFER, vertexBuffer)
+	gl.BufferData(webgl.ARRAY_BUFFER, vertices, webgl.STATIC_DRAW)
+
+	attribLoc := gl.GetAttribLocation(program, attribute)
+	if attribLoc < 0 {
+		return
+	}
+
+	gl.VertexAttribPointer(attribLoc, 2, webgl.FLOAT, false, 0, 0)
+	gl.EnableVertexAttribArray(attribLoc)
+}
+
 func main() {
 	document := js.Global().Get("document")
 	canvas := document.Call("getElementById", "webgl")
@@ -20,8 +38,9 @@ func main() {
 	gl.Clear(webgl.COLOR_BUFFER_BIT)
 
 	vertShader := `
+		attribute vec4 position;
 		void main() {
-			gl_Position = vec4(0.0, 0.0, 0.0, 1.0);
+			gl_Position = position;
 			gl_PointSize = 10.0;
 		}`
 	fragShader := `
@@ -34,8 +53,15 @@ func main() {
 	}
 	_ = program
 
+	vertices := []float32{
+		+0.0, +0.5,
+		-0.5, -0.5,
+		+0.5, -0.5,
+	}
+	initBuffer(gl, program, "position", vertices)
+
 	//gl.Call("clearColor", 0.0, 0.0, 0.0, 1.0)
 	//gl.Call("clear", gl.Get("COLOR_BUFFER_BIT"))
-	gl.DrawArrays(webgl.POINTS, 0, 1)
+	gl.DrawArrays(webgl.TRIANGLES, 0, 3)
 
 }
