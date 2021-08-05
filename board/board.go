@@ -21,8 +21,9 @@ func main() {
 
 	vertShader := `
 		attribute vec4 position;
+		uniform mat4 m;
 		void main() {
-			gl_Position = position;
+			gl_Position = m * position;
 			gl_PointSize = 10.0;
 		}`
 	fragShader := `
@@ -47,6 +48,12 @@ func main() {
 
 	color := gl.GetUniformLocation(program, "color")
 	gl.Uniform4fv(color, []float32{0.5, 0.5, 0.9, 1.0})
+	color = gl.GetUniformLocation(program, "m")
+	gl.UniformMatrix4fv(color, false, []float32{0.5, 0, 0, 0,
+		0, 1, 0, 0,
+		0, 0, 1, 0,
+		0, 0, 0, 1.5,
+	})
 
 	gl.DrawArrays(webgl.TRIANGLES, 0, buff.VertexCount)
 }
