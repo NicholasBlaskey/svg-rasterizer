@@ -26,8 +26,10 @@ func main() {
 			gl_PointSize = 10.0;
 		}`
 	fragShader := `
+		precision mediump float;
+		uniform vec4 color;
 		void main() {
-			gl_FragColor = vec4(1.0, 0.0, 0.0, 1.0);
+			gl_FragColor = vec4(color);
 		}`
 	program, err := util.CreateProgram(gl, vertShader, fragShader)
 	if err != nil {
@@ -42,6 +44,9 @@ func main() {
 	buff := util.NewBufferVec2(gl)
 	buff.BindData(gl, vertices)
 	buff.BindToAttrib(gl, program, "position")
+
+	color := gl.GetUniformLocation(program, "color")
+	gl.Uniform4fv(color, []float32{0.5, 0.5, 0.9, 1.0})
 
 	gl.DrawArrays(webgl.TRIANGLES, 0, buff.VertexCount)
 }
