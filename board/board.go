@@ -1,11 +1,12 @@
 package main
 
 import (
+	"github.com/nicholasblaskey/webgl/webgl"
 	"syscall/js"
 
 	"github.com/nicholasblaskey/webgl-utils/util"
 
-	"github.com/nicholasblaskey/webgl/webgl"
+	mgl "github.com/go-gl/mathgl/mgl32"
 )
 
 func main() {
@@ -46,14 +47,8 @@ func main() {
 	buff.BindData(gl, vertices)
 	buff.BindToAttrib(gl, program, "position")
 
-	color := gl.GetUniformLocation(program, "color")
-	gl.Uniform4fv(color, []float32{0.5, 0.5, 0.9, 1.0})
-	color = gl.GetUniformLocation(program, "m")
-	gl.UniformMatrix4fv(color, false, []float32{0.5, 0, 0, 0,
-		0, 1, 0, 0,
-		0, 0, 1, 0,
-		0, 0, 0, 1.5,
-	})
+	util.SetVec4(gl, program, "color", mgl.Vec4{0.3, 0.9, 0.4, 1.0})
+	util.SetMat4(gl, program, "m", mgl.Scale3D(0.5, 0.5, 0.9))
 
 	gl.DrawArrays(webgl.TRIANGLES, 0, buff.VertexCount)
 }
