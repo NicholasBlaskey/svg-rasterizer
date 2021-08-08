@@ -11,14 +11,20 @@ import (
 )
 
 type board struct {
-	Width         int
-	Height        int
-	gl            *webgl.Gl
-	colorsInd     []float32 // Color indicator 0 => background, 1 => foreground
+	Width  int
+	Height int
+	gl     *webgl.Gl
+	//
 	positions     []float32
+	positionsBuff *util.Buffer
+	//
+	texCoords     []float32
+	texCoordsBuff *util.Buffer
+	//
+	texture       *webgl.Texture
 	program       *webgl.Program
-	posBuff       *util.Buffer
 	colorsIndBuff *util.Buffer
+	colorsInd     []float32 // Color indicator 0 => background, 1 => foreground
 }
 
 func New(canvas js.Value) (*board, error) {
@@ -33,8 +39,10 @@ func New(canvas js.Value) (*board, error) {
 	if err != nil {
 		return nil, err
 	}
+	b.initTexCoords()
 	b.initPositions()
-	b.initColorInd()
+	//b.initColorInd()
+	b.initTexture()
 
 	b.SetColors(mgl.Vec4{6 / 255.0, 35 / 255.0, 41 / 255.0, 1.0},
 		mgl.Vec4{140 / 255.0, 222 / 255.0, 148 / 255.0})
@@ -47,22 +55,19 @@ func New(canvas js.Value) (*board, error) {
 func (b *board) initShaders() error {
 	vertShader := `
 			attribute vec2 a_position;
-			attribute float a_colorInd;	
-			uniform mat4 m;
-			varying float colorInd;
+			attribute vec2 a_texCoord;			
+			varying vec2 texCoord;
 			void main() {
-				gl_Position = vec4(0.0, 0.0, 0.0, 1.0); //vec4(a_position, 0.0, 1.0);
-				gl_PointSize = 1.0;
-				colorInd = a_colorInd;
+				gl_Position = vec4(a_position, 0.0, 1.0);
+				texCoord = a_texCoord;
 			}`
 
 	fragShader := `
 			precision mediump float;
-			uniform vec4 background;
-			uniform vec4 foreground;
-			varying float colorInd;
+			uniform sampler2D t;
+			varying vec2 texCoord;
 			void main() {
-				gl_FragColor = vec4(1.0, 1.0, 1.0, 1.0);
+				gl_FragColor = texture2D(t, texCoord);
 			}`
 
 	program, err := util.CreateProgram(b.gl, vertShader, fragShader)
@@ -74,24 +79,55 @@ func (b *board) initShaders() error {
 	return nil
 }
 
-func (b *board) initPositions() {
-	// Generate positions data
-	b.positions = []float32{}
-	for x := float32(0); x < float32(b.Width); x++ {
-		for y := float32(0); y < float32(b.Height); y++ {
-			b.positions = append(b.positions, x/float32(b.Width), y/float32(b.Height))
-			break
-		}
-		break
+func (b *board) initTexture() {
+	b.texture = b.gl.CreateTexture()
+	b.gl.ActiveTexture(0x84C0) // webgl.TEXTURE0 (TODO code gen this in)
+	b.gl.BindTexture(webgl.TEXTURE_2D, b.texture)
+
+	data := []byte{
+		0, 0, 255, 255,
+		255, 0, 0, 255,
+		0, 255, 0, 255,
+		255, 255, 255, 255,
 	}
-	fmt.Println(b.positions)
+	b.gl.TexImage2DArray(webgl.TEXTURE_2D, 0, webgl.RGBA, 2, 2, 0,
+		webgl.RGBA, webgl.UNSIGNED_BYTE, data)
 
-	// Initialize position buffer
-	b.posBuff = util.NewBufferVec2(b.gl)
-	b.posBuff.BindData(b.gl, b.positions)
-	b.posBuff.BindToAttrib(b.gl, b.program, "a_position")
+	b.gl.TexParameteri(webgl.TEXTURE_2D, webgl.TEXTURE_WRAP_S, webgl.CLAMP_TO_EDGE)
+	b.gl.TexParameteri(webgl.TEXTURE_2D, webgl.TEXTURE_WRAP_T, webgl.CLAMP_TO_EDGE)
+	b.gl.TexParameteri(webgl.TEXTURE_2D, webgl.TEXTURE_MIN_FILTER, webgl.LINEAR)
 
-	// Set point size
+	util.SetInt(b.gl, b.program, "t", 0)
+}
+
+func (b *board) initTexCoords() {
+	b.texCoords = []float32{
+		0.0, 1.0,
+		0.0, 0.0,
+		1.0, 0.0,
+		0.0, 1.0,
+		1.0, 0.0,
+		1.0, 1.0,
+	}
+
+	b.texCoordsBuff = util.NewBufferVec2(b.gl)
+	b.texCoordsBuff.BindData(b.gl, b.texCoords)
+	b.texCoordsBuff.BindToAttrib(b.gl, b.program, "a_texCoord")
+}
+
+func (b *board) initPositions() {
+	b.positions = []float32{
+		-1.0, +1.0,
+		-1.0, -1.0,
+		+1.0, -1.0,
+		-1.0, +1.0,
+		+1.0, -1.0,
+		+1.0, +1.0,
+	}
+
+	b.positionsBuff = util.NewBufferVec2(b.gl)
+	b.positionsBuff.BindData(b.gl, b.positions)
+	b.positionsBuff.BindToAttrib(b.gl, b.program, "a_position")
 }
 
 func (b *board) initColorInd() {
@@ -114,10 +150,8 @@ func (b *board) SetColors(background, foreground mgl.Vec4) {
 
 func (b *board) draw() {
 	//fmt.Println(b.positions)
-	fmt.Println(b.posBuff.VertexCount)
-
 	b.gl.Clear(webgl.COLOR_BUFFER_BIT)
-	b.gl.DrawArrays(webgl.POINTS, 0, b.posBuff.VertexCount)
+	b.gl.DrawArrays(webgl.TRIANGLES, 0, b.positionsBuff.VertexCount)
 }
 
 func main() {
