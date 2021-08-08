@@ -45,7 +45,7 @@ func New(canvas js.Value) (*board, error) {
 	b.initTexture()
 
 	b.SetColors(mgl.Vec4{6 / 255.0, 35 / 255.0, 41 / 255.0, 1.0},
-		mgl.Vec4{140 / 255.0, 222 / 255.0, 148 / 255.0})
+		mgl.Vec4{140 / 255.0, 222 / 255.0, 148 / 255.0, 1.0})
 	b.gl.ClearColor(0.3, 0.5, 0.3, 1.0)
 	b.draw()
 
@@ -66,8 +66,11 @@ func (b *board) initShaders() error {
 			precision mediump float;
 			uniform sampler2D t;
 			varying vec2 texCoord;
+			uniform vec4 foreground;
+			uniform vec4 background;
 			void main() {
-				gl_FragColor = texture2D(t, texCoord);
+				float alpha = texture2D(t, texCoord).a;
+				gl_FragColor = alpha * foreground + (1.0 - alpha) * background;
 			}`
 
 	program, err := util.CreateProgram(b.gl, vertShader, fragShader)
@@ -81,33 +84,31 @@ func (b *board) initShaders() error {
 
 func (b *board) initTexture() {
 	b.texture = b.gl.CreateTexture()
-	b.gl.ActiveTexture(0x84C0) // webgl.TEXTURE0 (TODO code gen this in)
+	b.gl.ActiveTexture(webgl.TEXTURE0)
 	b.gl.BindTexture(webgl.TEXTURE_2D, b.texture)
 
-	/*
-		data := []byte{
-			0, 0, 255, 255,
-			255, 0, 0, 255,
-			0, 255, 0, 255,
-			255, 255, 255, 255,
-		}
-	*/
 	data := []byte{}
-	l, w := 100, 100
-	for i := 0; i < l*w; i++ {
-		if i%2 == 0 || i%3 == 0 {
-			data = append(data, 255, 0, 0, 255)
-		} else {
-			data = append(data, 0, 0, 255, 255)
+	l, w := 4, 4
+	white := false
+	for i := 0; i < l; i++ {
+		white = i%2 == 0
+		for j := 0; j < w; j++ {
+			if white {
+				data = append(data, 255)
+			} else {
+				data = append(data, 0)
+			}
+			white = !white
 		}
 	}
 
-	b.gl.TexImage2DArray(webgl.TEXTURE_2D, 0, webgl.RGBA, l, w, 0,
-		webgl.RGBA, webgl.UNSIGNED_BYTE, data)
+	b.gl.TexImage2DArray(webgl.TEXTURE_2D, 0, webgl.ALPHA, w, l, 0,
+		webgl.ALPHA, webgl.UNSIGNED_BYTE, data)
 
 	b.gl.TexParameteri(webgl.TEXTURE_2D, webgl.TEXTURE_WRAP_S, webgl.CLAMP_TO_EDGE)
 	b.gl.TexParameteri(webgl.TEXTURE_2D, webgl.TEXTURE_WRAP_T, webgl.CLAMP_TO_EDGE)
-	b.gl.TexParameteri(webgl.TEXTURE_2D, webgl.TEXTURE_MIN_FILTER, webgl.LINEAR)
+	b.gl.TexParameteri(webgl.TEXTURE_2D, webgl.TEXTURE_MIN_FILTER, webgl.NEAREST)
+	b.gl.TexParameteri(webgl.TEXTURE_2D, webgl.TEXTURE_MAG_FILTER, webgl.NEAREST)
 
 	util.SetInt(b.gl, b.program, "t", 0)
 }
@@ -169,8 +170,8 @@ func (b *board) draw() {
 func main() {
 	document := js.Global().Get("document")
 	canvas := document.Call("getElementById", "webgl")
-	canvas.Set("height", 400)
-	canvas.Set("width", 400)
+	canvas.Set("height", 800)
+	canvas.Set("width", 800)
 	b, err := New(canvas)
 	if err != nil {
 		panic(err)
