@@ -84,13 +84,25 @@ func (b *board) initTexture() {
 	b.gl.ActiveTexture(0x84C0) // webgl.TEXTURE0 (TODO code gen this in)
 	b.gl.BindTexture(webgl.TEXTURE_2D, b.texture)
 
-	data := []byte{
-		0, 0, 255, 255,
-		255, 0, 0, 255,
-		0, 255, 0, 255,
-		255, 255, 255, 255,
+	/*
+		data := []byte{
+			0, 0, 255, 255,
+			255, 0, 0, 255,
+			0, 255, 0, 255,
+			255, 255, 255, 255,
+		}
+	*/
+	data := []byte{}
+	l, w := 100, 100
+	for i := 0; i < l*w; i++ {
+		if i%2 == 0 || i%3 == 0 {
+			data = append(data, 255, 0, 0, 255)
+		} else {
+			data = append(data, 0, 0, 255, 255)
+		}
 	}
-	b.gl.TexImage2DArray(webgl.TEXTURE_2D, 0, webgl.RGBA, 2, 2, 0,
+
+	b.gl.TexImage2DArray(webgl.TEXTURE_2D, 0, webgl.RGBA, l, w, 0,
 		webgl.RGBA, webgl.UNSIGNED_BYTE, data)
 
 	b.gl.TexParameteri(webgl.TEXTURE_2D, webgl.TEXTURE_WRAP_S, webgl.CLAMP_TO_EDGE)
