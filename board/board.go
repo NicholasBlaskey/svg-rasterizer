@@ -3,6 +3,8 @@ package main
 import (
 	"fmt"
 
+	"time"
+
 	"github.com/nicholasblaskey/webgl/webgl"
 	"syscall/js"
 
@@ -33,7 +35,7 @@ func New(canvas js.Value) (*board, error) {
 		return nil, err
 	}
 
-	b := &board{Width: 50, Height: 50, gl: gl}
+	b := &board{Width: 4, Height: 4, gl: gl}
 
 	err = b.initShaders()
 	if err != nil {
@@ -88,11 +90,10 @@ func (b *board) initTexture() {
 	b.gl.BindTexture(webgl.TEXTURE_2D, b.texture)
 
 	data := []byte{}
-	l, w := 4, 4
 	white := false
-	for i := 0; i < l; i++ {
+	for i := 0; i < b.Width; i++ {
 		white = i%2 == 0
-		for j := 0; j < w; j++ {
+		for j := 0; j < b.Height; j++ {
 			if white {
 				data = append(data, 255)
 			} else {
@@ -102,8 +103,7 @@ func (b *board) initTexture() {
 		}
 	}
 
-	b.gl.TexImage2DArray(webgl.TEXTURE_2D, 0, webgl.ALPHA, w, l, 0,
-		webgl.ALPHA, webgl.UNSIGNED_BYTE, data)
+	b.setTextureData(data)
 
 	b.gl.TexParameteri(webgl.TEXTURE_2D, webgl.TEXTURE_WRAP_S, webgl.CLAMP_TO_EDGE)
 	b.gl.TexParameteri(webgl.TEXTURE_2D, webgl.TEXTURE_WRAP_T, webgl.CLAMP_TO_EDGE)
@@ -111,6 +111,16 @@ func (b *board) initTexture() {
 	b.gl.TexParameteri(webgl.TEXTURE_2D, webgl.TEXTURE_MAG_FILTER, webgl.NEAREST)
 
 	util.SetInt(b.gl, b.program, "t", 0)
+}
+
+func (b *board) setTextureData(data []byte) {
+	b.gl.TexImage2DArray(webgl.TEXTURE_2D, 0, webgl.ALPHA, b.Width, b.Height, 0,
+		webgl.ALPHA, webgl.UNSIGNED_BYTE, data)
+}
+
+func (b *board) SetPixels(data []byte) {
+	b.setTextureData(data)
+	b.draw()
 }
 
 func (b *board) initTexCoords() {
@@ -175,6 +185,24 @@ func main() {
 	b, err := New(canvas)
 	if err != nil {
 		panic(err)
+	}
+
+	allBlack := []byte{}
+	allWhite := []byte{}
+	for i := 0; i < 4*4; i++ {
+		allBlack = append(allBlack, 0)
+		allWhite = append(allWhite, 255)
+	}
+
+	white := false
+	for {
+		if !white {
+			b.SetPixels(allBlack)
+		} else {
+			b.SetPixels(allWhite)
+		}
+		white = !white
+		time.Sleep(time.Second * 1)
 	}
 
 	_ = b
