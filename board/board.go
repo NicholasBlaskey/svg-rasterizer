@@ -14,8 +14,11 @@ type board struct {
 	Width  int
 	Height int
 	gl     *webgl.Gl
+	canvas js.Value
 	//
-	ZoomFactor float32
+	ZoomFactor       float32
+	TranslationSpeed float32
+	translation      mgl.Vec2
 	//
 	positions     []float32
 	positionsBuff *util.Buffer
@@ -35,7 +38,8 @@ func New(canvas js.Value) (*board, error) {
 		return nil, err
 	}
 
-	b := &board{Width: 100, Height: 100, gl: gl, ZoomFactor: 0.05}
+	b := &board{Width: 100, Height: 100, gl: gl, canvas: canvas,
+		ZoomFactor: 0.05, TranslationSpeed: 0.003}
 
 	err = b.initShaders()
 	if err != nil {
@@ -47,6 +51,7 @@ func New(canvas js.Value) (*board, error) {
 	b.initTexture()
 
 	b.initZoomListener()
+	b.initTranslationListener()
 
 	b.SetColors(mgl.Vec4{6 / 255.0, 35 / 255.0, 41 / 255.0, 1.0},
 		mgl.Vec4{140 / 255.0, 222 / 255.0, 148 / 255.0, 1.0})
@@ -56,14 +61,62 @@ func New(canvas js.Value) (*board, error) {
 	return b, nil
 }
 
+func getXAndYFromEvent(e js.Value) (float32, float32) {
+	x := float32(e.Get("offsetX").Float())
+	y := float32(e.Get("offsetY").Float())
+
+	return x, y
+}
+
+func (b *board) initTranslationListener() {
+	isDown := false
+	xStart, yStart := float32(0.0), float32(0.0)
+	b.canvas.Call("addEventListener", "mousedown",
+		js.FuncOf(func(this js.Value, args []js.Value) interface{} {
+			isDown = true
+			xStart, yStart = getXAndYFromEvent(args[0])
+
+			return nil
+		}))
+
+	js.Global().Call("addEventListener", "mouseup",
+		js.FuncOf(func(this js.Value, args []js.Value) interface{} {
+			if isDown {
+				xNew, yNew := getXAndYFromEvent(args[0])
+				b.applyTranslation(xStart, yStart, xNew, yNew)
+				xStart, yStart = 0, 0
+				isDown = false
+			}
+
+			return nil
+		}))
+
+	js.Global().Call("addEventListener", "mousemove",
+		js.FuncOf(func(this js.Value, args []js.Value) interface{} {
+			if isDown {
+				xNew, yNew := getXAndYFromEvent(args[0])
+				b.applyTranslation(xStart, yStart, xNew, yNew)
+				xStart, yStart = xNew, yNew
+			}
+
+			return nil
+		}))
+}
+
+func (b *board) applyTranslation(xStart, yStart, x, y float32) {
+	b.translation = b.translation.Add(mgl.Vec2{x - xStart, yStart - y}.Mul(b.TranslationSpeed))
+
+	util.SetVec2(b.gl, b.program, "translation", b.translation)
+	b.draw()
+
+	fmt.Println(xStart-x, yStart-y)
+}
+
 func (b *board) initZoomListener() {
-	fmt.Println("SET zoom listener")
 	zoomValue := float32(1.0)
 	b.setZoom(zoomValue)
 
 	eventFunc := js.FuncOf(func(this js.Value, args []js.Value) interface{} {
-		fmt.Println(zoomValue)
-
 		val := args[0].Get("deltaY").Float()
 		if val > 0 {
 			zoomValue -= b.ZoomFactor
@@ -79,7 +132,6 @@ func (b *board) initZoomListener() {
 	})
 
 	js.Global().Call("addEventListener", "wheel", eventFunc)
-	//js.Global().Call("addEventListener", "DOMMouseScroll", eventFunc)
 }
 
 func (b *board) setZoom(zoom float32) {
@@ -92,9 +144,10 @@ func (b *board) initShaders() error {
 			attribute vec2 a_texCoord;			
 			varying vec2 texCoord;
 
+			uniform vec2 translation;
 			uniform float zoomFactor;
 			void main() {
-				gl_Position = vec4(a_position * zoomFactor, 0.0, 1.0);
+				gl_Position = vec4(a_position * zoomFactor + translation, 0.0, 1.0);
 				texCoord = a_texCoord;
 			}`
 
