@@ -3,8 +3,6 @@ package main
 import (
 	"fmt"
 
-	"time"
-
 	"github.com/nicholasblaskey/webgl/webgl"
 	"syscall/js"
 
@@ -16,6 +14,8 @@ type board struct {
 	Width  int
 	Height int
 	gl     *webgl.Gl
+	//
+	ZoomFactor float32
 	//
 	positions     []float32
 	positionsBuff *util.Buffer
@@ -35,7 +35,7 @@ func New(canvas js.Value) (*board, error) {
 		return nil, err
 	}
 
-	b := &board{Width: 4, Height: 4, gl: gl}
+	b := &board{Width: 100, Height: 100, gl: gl, ZoomFactor: 0.05}
 
 	err = b.initShaders()
 	if err != nil {
@@ -46,6 +46,8 @@ func New(canvas js.Value) (*board, error) {
 	//b.initColorInd()
 	b.initTexture()
 
+	b.initZoomListener()
+
 	b.SetColors(mgl.Vec4{6 / 255.0, 35 / 255.0, 41 / 255.0, 1.0},
 		mgl.Vec4{140 / 255.0, 222 / 255.0, 148 / 255.0, 1.0})
 	b.gl.ClearColor(0.3, 0.5, 0.3, 1.0)
@@ -54,13 +56,45 @@ func New(canvas js.Value) (*board, error) {
 	return b, nil
 }
 
+func (b *board) initZoomListener() {
+	fmt.Println("SET zoom listener")
+	zoomValue := float32(1.0)
+	b.setZoom(zoomValue)
+
+	eventFunc := js.FuncOf(func(this js.Value, args []js.Value) interface{} {
+		fmt.Println(zoomValue)
+
+		val := args[0].Get("deltaY").Float()
+		if val > 0 {
+			zoomValue -= b.ZoomFactor
+			if zoomValue < 0 {
+				zoomValue = 0
+			}
+		} else {
+			zoomValue += b.ZoomFactor
+		}
+		b.setZoom(zoomValue)
+		b.draw()
+		return nil
+	})
+
+	js.Global().Call("addEventListener", "wheel", eventFunc)
+	//js.Global().Call("addEventListener", "DOMMouseScroll", eventFunc)
+}
+
+func (b *board) setZoom(zoom float32) {
+	util.SetFloat(b.gl, b.program, "zoomFactor", zoom)
+}
+
 func (b *board) initShaders() error {
 	vertShader := `
 			attribute vec2 a_position;
 			attribute vec2 a_texCoord;			
 			varying vec2 texCoord;
+
+			uniform float zoomFactor;
 			void main() {
-				gl_Position = vec4(a_position, 0.0, 1.0);
+				gl_Position = vec4(a_position * zoomFactor, 0.0, 1.0);
 				texCoord = a_texCoord;
 			}`
 
@@ -89,20 +123,7 @@ func (b *board) initTexture() {
 	b.gl.ActiveTexture(webgl.TEXTURE0)
 	b.gl.BindTexture(webgl.TEXTURE_2D, b.texture)
 
-	data := []byte{}
-	white := false
-	for i := 0; i < b.Width; i++ {
-		white = i%2 == 0
-		for j := 0; j < b.Height; j++ {
-			if white {
-				data = append(data, 255)
-			} else {
-				data = append(data, 0)
-			}
-			white = !white
-		}
-	}
-
+	data := make([]byte, b.Width*b.Height)
 	b.setTextureData(data)
 
 	b.gl.TexParameteri(webgl.TEXTURE_2D, webgl.TEXTURE_WRAP_S, webgl.CLAMP_TO_EDGE)
@@ -187,65 +208,20 @@ func main() {
 		panic(err)
 	}
 
-	allBlack := []byte{}
-	allWhite := []byte{}
-	for i := 0; i < 4*4; i++ {
-		allBlack = append(allBlack, 0)
-		allWhite = append(allWhite, 255)
-	}
-
+	data := []byte{}
 	white := false
-	for {
-		if !white {
-			b.SetPixels(allBlack)
-		} else {
-			b.SetPixels(allWhite)
+	for i := 0; i < b.Width; i++ {
+		white = i%2 == 0
+		for j := 0; j < b.Height; j++ {
+			if white {
+				data = append(data, 255)
+			} else {
+				data = append(data, 0)
+			}
+			white = !white
 		}
-		white = !white
-		time.Sleep(time.Second * 1)
 	}
+	b.SetPixels(data)
 
-	_ = b
-
-	/*
-		gl, err := webgl.FromCanvas(canvas)
-		if err != nil {
-			panic(err)
-		}
-
-		gl.ClearColor(0.3, 0.5, 0.3, 1.0)
-		gl.Clear(webgl.COLOR_BUFFER_BIT)
-
-		vertShader := `
-			attribute vec4 position;
-			uniform mat4 m;
-			void main() {
-				gl_Position = m * position;
-				gl_PointSize = 10.0;
-			}`
-		fragShader := `
-			precision mediump float;
-			uniform vec4 color;
-			void main() {
-				gl_FragColor = vec4(color);
-			}`
-		program, err := util.CreateProgram(gl, vertShader, fragShader)
-		if err != nil {
-			panic(err)
-		}
-
-		vertices := []float32{
-			+0.0, +0.5,
-			-0.5, -0.5,
-			+0.5, -0.5,
-		}
-		buff := util.NewBufferVec2(gl)
-		buff.BindData(gl, vertices)
-		buff.BindToAttrib(gl, program, "position")
-
-		util.SetVec4(gl, program, "color", mgl.Vec4{0.3, 0.9, 0.4, 1.0})
-		util.SetMat4(gl, program, "m", mgl.Scale3D(0.5, 0.5, 0.9))
-
-		gl.DrawArrays(webgl.TRIANGLES, 0, buff.VertexCount)
-	*/
+	<-make(chan bool) // Prevent program from exiting
 }
