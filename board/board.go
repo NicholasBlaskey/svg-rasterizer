@@ -26,9 +26,12 @@ type board struct {
 	texCoords     []float32
 	texCoordsBuff *util.Buffer
 	//
-	pixelInspectorOn bool
-	mouseX           int
-	mouseY           int
+	pixelPos              []float32
+	pixelPosBuff          *util.Buffer
+	pixelInspectorProgram *webgl.Program
+	pixelInspectorOn      bool
+	mouseX                int
+	mouseY                int
 	//
 	texture       *webgl.Texture
 	program       *webgl.Program
@@ -135,6 +138,7 @@ func (b *board) initTranslationListener() {
 func (b *board) applyTranslation(xStart, yStart, x, y float32) {
 	b.translation = b.translation.Add(mgl.Vec2{x - xStart, yStart - y}.Mul(b.TranslationSpeed))
 
+	b.gl.UseProgram(b.program)
 	util.SetVec2(b.gl, b.program, "translation", b.translation)
 	b.draw()
 }
@@ -162,6 +166,7 @@ func (b *board) initZoomListener() {
 }
 
 func (b *board) setZoom(zoom float32) {
+	b.gl.UseProgram(b.program)
 	util.SetFloat(b.gl, b.program, "zoomFactor", zoom)
 }
 
@@ -193,8 +198,26 @@ func (b *board) initShaders() error {
 	if err != nil {
 		return err
 	}
-
 	b.program = program
+
+	vertShader = `
+			attribute vec2 a_position;
+
+			void main() {
+				gl_Position = vec4(a_position, 0.0, 1.0);
+			}`
+
+	fragShader = `
+			precision mediump float;
+			void main() {
+				gl_FragColor = vec4(1.0, 0.0, 1.0, 1.0); 
+			}`
+	pixelProgram, err := util.CreateProgram(b.gl, vertShader, fragShader)
+	if err != nil {
+		return err
+	}
+	b.pixelInspectorProgram = pixelProgram
+
 	return nil
 }
 
@@ -211,6 +234,7 @@ func (b *board) initTexture() {
 	b.gl.TexParameteri(webgl.TEXTURE_2D, webgl.TEXTURE_MIN_FILTER, webgl.NEAREST)
 	b.gl.TexParameteri(webgl.TEXTURE_2D, webgl.TEXTURE_MAG_FILTER, webgl.NEAREST)
 
+	b.gl.UseProgram(b.program)
 	util.SetInt(b.gl, b.program, "t", 0)
 }
 
@@ -234,9 +258,9 @@ func (b *board) initTexCoords() {
 		1.0, 1.0,
 	}
 
+	b.gl.UseProgram(b.program)
 	b.texCoordsBuff = util.NewBufferVec2(b.gl)
 	b.texCoordsBuff.BindData(b.gl, b.texCoords)
-	b.texCoordsBuff.BindToAttrib(b.gl, b.program, "a_texCoord")
 }
 
 func (b *board) initPositions() {
@@ -249,31 +273,49 @@ func (b *board) initPositions() {
 		+1.0, +1.0,
 	}
 
+	b.gl.UseProgram(b.program)
 	b.positionsBuff = util.NewBufferVec2(b.gl)
 	b.positionsBuff.BindData(b.gl, b.positions)
-	b.positionsBuff.BindToAttrib(b.gl, b.program, "a_position")
-}
 
-func (b *board) initColorInd() {
-	b.colorsInd = make([]float32, 1) //b.Width*b.Height)
-	for i := 0; i < len(b.colorsInd); i += 2 {
-		b.colorsInd[i] = 1.0
-		break
+	b.pixelPos = []float32{
+		-0.5, +0.5,
+		-0.5, -0.5,
+		+0.5, -0.5,
+		-0.5, +0.5,
+		+0.5, -0.5,
+		+0.5, +0.5,
 	}
-
-	b.colorsIndBuff = util.NewBufferFloat(b.gl)
-	b.colorsIndBuff.BindData(b.gl, b.colorsInd)
-	b.colorsIndBuff.BindToAttrib(b.gl, b.program, "a_colorInd")
+	b.gl.UseProgram(b.pixelInspectorProgram)
+	b.pixelPosBuff = util.NewBufferVec2(b.gl)
+	b.pixelPosBuff.BindData(b.gl, b.pixelPos)
 }
 
 func (b *board) SetColors(background, foreground mgl.Vec4) {
+	b.gl.UseProgram(b.program)
 	util.SetVec4(b.gl, b.program, "background", background)
 	util.SetVec4(b.gl, b.program, "foreground", foreground)
 }
 
 func (b *board) draw() {
+	// Draw the texture.
+	b.gl.UseProgram(b.program)
+	b.positionsBuff.BindToAttrib(b.gl, b.program, "a_position")
+	b.texCoordsBuff.BindToAttrib(b.gl, b.program, "a_texCoord")
+
 	b.gl.Clear(webgl.COLOR_BUFFER_BIT)
 	b.gl.DrawArrays(webgl.TRIANGLES, 0, b.positionsBuff.VertexCount)
+
+	if !b.pixelInspectorOn {
+		return
+	}
+
+	b.gl.UseProgram(b.pixelInspectorProgram)
+	b.pixelPosBuff.BindToAttrib(b.gl, b.pixelInspectorProgram, "a_position")
+	b.gl.DrawArrays(webgl.TRIANGLES, 0, b.pixelPosBuff.VertexCount)
+
+	// Read the pixels from the texture.
+
+	// Draw
 }
 
 func main() {
