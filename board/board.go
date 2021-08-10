@@ -38,8 +38,11 @@ func New(canvas js.Value) (*board, error) {
 		return nil, err
 	}
 
-	b := &board{Width: 100, Height: 100, gl: gl, canvas: canvas,
-		ZoomFactor: 0.05, TranslationSpeed: 0.003}
+	// TODO ensure (width * height) % 4 == 0
+	//b := &board{Width: canvas.Get("height").Int(), Height: canvas.Get("width").Int(),
+	//
+	b := &board{Width: 12, Height: 12,
+		gl: gl, canvas: canvas, ZoomFactor: 0.05, TranslationSpeed: 0.003}
 
 	err = b.initShaders()
 	if err != nil {
@@ -108,8 +111,6 @@ func (b *board) applyTranslation(xStart, yStart, x, y float32) {
 
 	util.SetVec2(b.gl, b.program, "translation", b.translation)
 	b.draw()
-
-	fmt.Println(xStart-x, yStart-y)
 }
 
 func (b *board) initZoomListener() {
@@ -188,6 +189,7 @@ func (b *board) initTexture() {
 }
 
 func (b *board) setTextureData(data []byte) {
+	fmt.Println(b.Width, b.Height, len(data))
 	b.gl.TexImage2DArray(webgl.TEXTURE_2D, 0, webgl.ALPHA, b.Width, b.Height, 0,
 		webgl.ALPHA, webgl.UNSIGNED_BYTE, data)
 }
@@ -274,6 +276,7 @@ func main() {
 			white = !white
 		}
 	}
+	fmt.Println(len(data))
 	b.SetPixels(data)
 
 	<-make(chan bool) // Prevent program from exiting
