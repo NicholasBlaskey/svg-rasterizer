@@ -26,6 +26,10 @@ type board struct {
 	texCoords     []float32
 	texCoordsBuff *util.Buffer
 	//
+	pixelInspectorOn bool
+	mouseX           int
+	mouseY           int
+	//
 	texture       *webgl.Texture
 	program       *webgl.Program
 	colorsIndBuff *util.Buffer
@@ -42,7 +46,8 @@ func New(canvas js.Value) (*board, error) {
 	//b := &board{Width: canvas.Get("height").Int(), Height: canvas.Get("width").Int(),
 	//
 	b := &board{Width: 12, Height: 12,
-		gl: gl, canvas: canvas, ZoomFactor: 0.05, TranslationSpeed: 0.003}
+		gl: gl, canvas: canvas, ZoomFactor: 0.05, TranslationSpeed: 0.003,
+	}
 
 	err = b.initShaders()
 	if err != nil {
@@ -55,6 +60,7 @@ func New(canvas js.Value) (*board, error) {
 
 	b.initZoomListener()
 	b.initTranslationListener()
+	b.initPixelInspector()
 
 	b.SetColors(mgl.Vec4{6 / 255.0, 35 / 255.0, 41 / 255.0, 1.0},
 		mgl.Vec4{140 / 255.0, 222 / 255.0, 148 / 255.0, 1.0})
@@ -62,6 +68,26 @@ func New(canvas js.Value) (*board, error) {
 	b.draw()
 
 	return b, nil
+}
+
+func (b *board) EnablePixelInspector(shouldTurnOn bool) {
+	b.pixelInspectorOn = shouldTurnOn
+	b.draw()
+}
+
+func (b *board) initPixelInspector() {
+	// Always have the pixel inspector on and listening
+	js.Global().Call("addEventListener", "mousemove",
+		js.FuncOf(func(this js.Value, args []js.Value) interface{} {
+			x, y := getXAndYFromEvent(args[0])
+			b.mouseX, b.mouseY = int(x), int(y)
+
+			if b.pixelInspectorOn {
+				b.draw()
+			}
+
+			return nil
+		}))
 }
 
 func getXAndYFromEvent(e js.Value) (float32, float32) {
@@ -189,7 +215,6 @@ func (b *board) initTexture() {
 }
 
 func (b *board) setTextureData(data []byte) {
-	fmt.Println(b.Width, b.Height, len(data))
 	b.gl.TexImage2DArray(webgl.TEXTURE_2D, 0, webgl.ALPHA, b.Width, b.Height, 0,
 		webgl.ALPHA, webgl.UNSIGNED_BYTE, data)
 }
@@ -231,7 +256,6 @@ func (b *board) initPositions() {
 
 func (b *board) initColorInd() {
 	b.colorsInd = make([]float32, 1) //b.Width*b.Height)
-	fmt.Println(b.colorsInd)
 	for i := 0; i < len(b.colorsInd); i += 2 {
 		b.colorsInd[i] = 1.0
 		break
@@ -248,7 +272,6 @@ func (b *board) SetColors(background, foreground mgl.Vec4) {
 }
 
 func (b *board) draw() {
-	//fmt.Println(b.positions)
 	b.gl.Clear(webgl.COLOR_BUFFER_BIT)
 	b.gl.DrawArrays(webgl.TRIANGLES, 0, b.positionsBuff.VertexCount)
 }
@@ -262,6 +285,9 @@ func main() {
 	if err != nil {
 		panic(err)
 	}
+	b.EnablePixelInspector(true)
+
+	fmt.Println("starting")
 
 	data := []byte{}
 	white := false
@@ -276,7 +302,6 @@ func main() {
 			white = !white
 		}
 	}
-	fmt.Println(len(data))
 	b.SetPixels(data)
 
 	<-make(chan bool) // Prevent program from exiting
