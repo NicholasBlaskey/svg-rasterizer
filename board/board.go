@@ -278,12 +278,12 @@ func (b *board) initPositions() {
 	b.positionsBuff.BindData(b.gl, b.positions)
 
 	b.pixelPos = []float32{
-		-0.5, +0.5,
-		-0.5, -0.5,
-		+0.5, -0.5,
-		-0.5, +0.5,
-		+0.5, -0.5,
-		+0.5, +0.5,
+		-0.99, +0.99,
+		-0.99, -0.99,
+		+0.99, -0.99,
+		-0.99, +0.99,
+		+0.99, -0.99,
+		+0.99, +0.99,
 	}
 	b.gl.UseProgram(b.pixelInspectorProgram)
 	b.pixelPosBuff = util.NewBufferVec2(b.gl)
@@ -297,17 +297,32 @@ func (b *board) SetColors(background, foreground mgl.Vec4) {
 }
 
 func (b *board) draw() {
+	w, h := b.canvas.Get("width").Int(), b.canvas.Get("height").Int()
+
 	// Draw the texture.
+	b.gl.Viewport(0.0, 0.0, w, h) // TODO change when we change the canvas size???
+
 	b.gl.UseProgram(b.program)
 	b.positionsBuff.BindToAttrib(b.gl, b.program, "a_position")
 	b.texCoordsBuff.BindToAttrib(b.gl, b.program, "a_texCoord")
 
+	b.gl.ClearColor(1.0, 1.0, 1.0, 1.0)
 	b.gl.Clear(webgl.COLOR_BUFFER_BIT)
 	b.gl.DrawArrays(webgl.TRIANGLES, 0, b.positionsBuff.VertexCount)
 
 	if !b.pixelInspectorOn {
 		return
 	}
+
+	// Draw the pixel inpector
+	b.gl.Viewport(w/2, h/2, w/2, h/2)
+
+	// Draw black box around viewport to be used for pixel borders.
+	b.gl.Enable(webgl.SCISSOR_TEST)
+	b.gl.Scissor(w/2, h/2, w/2, h/2)
+	b.gl.ClearColor(0.0, 0, 0.0, 1.0)
+	b.gl.Clear(webgl.COLOR_BUFFER_BIT)
+	b.gl.Disable(webgl.SCISSOR_TEST)
 
 	b.gl.UseProgram(b.pixelInspectorProgram)
 	b.pixelPosBuff.BindToAttrib(b.gl, b.pixelInspectorProgram, "a_position")
