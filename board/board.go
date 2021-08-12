@@ -51,7 +51,7 @@ func New(canvas js.Value) (*board, error) {
 	//
 	b := &board{Width: 12, Height: 12,
 		gl: gl, canvas: canvas, ZoomFactor: 0.05, TranslationSpeed: 0.003,
-		numSquares: 10,
+		numSquares: 16,
 	}
 
 	err = b.initShaders()
@@ -283,25 +283,29 @@ func (b *board) initPositions() {
 	b.positionsBuff.BindData(b.gl, b.positions)
 
 	b.pixelPos = []float32{}
-	quad := []float32{
-		0.30, 0.70,
-		0.30, 0.30,
-		0.70, 0.70,
-		0.70, 0.30,
-	}
-
-	for i := 0; i < len(quad); i++ {
-		// Multiply by size factor
-		quad[i] = quad[i] / 10
-
-		// Multiply by border factor
-		//quad[i] = quad[i] * 0.9
-	}
-	fmt.Println(quad)
+	/*
+		quad := []float32{
+			0.30, 0.70,
+			0.30, 0.30,
+			0.70, 0.70,
+			0.70, 0.30,
+		}
+	*/
 
 	translations := []mgl.Vec2{}
 	xOffset := 1.0 / float32(b.numSquares)
 	yOffset := 1.0 / float32(b.numSquares)
+
+	borderAmount := float32(0.005)
+	quad := []float32{
+		-xOffset + borderAmount, +yOffset - borderAmount,
+		-xOffset + borderAmount, -yOffset + borderAmount,
+		+xOffset - borderAmount, -yOffset + borderAmount,
+		-xOffset + borderAmount, +yOffset - borderAmount,
+		+xOffset - borderAmount, -yOffset + borderAmount,
+		+xOffset - borderAmount, +yOffset - borderAmount,
+	}
+
 	for y := -b.numSquares; y < b.numSquares; y += 2 {
 		for x := -b.numSquares; x < b.numSquares; x += 2 {
 			translations = append(translations,
@@ -370,7 +374,7 @@ func (b *board) draw() {
 
 	b.gl.UseProgram(b.pixelInspectorProgram)
 	b.pixelPosBuff.BindToAttrib(b.gl, b.pixelInspectorProgram, "a_position")
-	b.gl.DrawArrays(webgl.TRIANGLE_STRIP, 0, b.pixelPosBuff.VertexCount)
+	b.gl.DrawArrays(webgl.TRIANGLES, 0, b.pixelPosBuff.VertexCount)
 
 	// Read the pixels from the texture.
 
