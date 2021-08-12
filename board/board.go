@@ -30,8 +30,8 @@ type board struct {
 	pixelPosBuff          *util.Buffer
 	pixelInspectorProgram *webgl.Program
 	pixelInspectorOn      bool
-	mouseX                int
-	mouseY                int
+	mouseX                float32
+	mouseY                float32
 	numSquares            int // numSquares x numSquares squares in pixel inspector
 	//
 	texture       *webgl.Texture
@@ -47,11 +47,12 @@ func New(canvas js.Value) (*board, error) {
 	}
 
 	// TODO ensure (width * height) % 4 == 0
-	//b := &board{Width: canvas.Get("height").Int(), Height: canvas.Get("width").Int(),
+	//b := &board{
 	//
-	b := &board{Width: 12, Height: 12,
-		gl: gl, canvas: canvas, ZoomFactor: 0.05, TranslationSpeed: 0.003,
+	b := &board{gl: gl, canvas: canvas, ZoomFactor: 0.05, TranslationSpeed: 0.003,
 		numSquares: 16,
+		//Width:      12, Height: 12,
+		Width: canvas.Get("height").Int(), Height: canvas.Get("width").Int(),
 	}
 
 	err = b.initShaders()
@@ -82,10 +83,14 @@ func (b *board) EnablePixelInspector(shouldTurnOn bool) {
 
 func (b *board) initPixelInspector() {
 	// Always have the pixel inspector on and listening
-	js.Global().Call("addEventListener", "mousemove",
+	b.canvas.Call("addEventListener", "mousemove",
 		js.FuncOf(func(this js.Value, args []js.Value) interface{} {
 			x, y := getXAndYFromEvent(args[0])
-			b.mouseX, b.mouseY = int(x), int(y)
+			b.mouseX, b.mouseY = x, y
+			// TODO change to .Width and .Height
+			b.mouseX = x / float32(b.canvas.Get("width").Int())
+			b.mouseY = y / float32(b.canvas.Get("height").Int())
+			fmt.Println(b.mouseX, b.mouseY)
 
 			if b.pixelInspectorOn {
 				b.draw()
@@ -214,8 +219,13 @@ func (b *board) initShaders() error {
 
 	fragShader = `
 			precision mediump float;
+			uniform sampler2D t;
+			uniform vec2 mousePos;
+			uniform vec4 foreground;
+			uniform vec4 background;
 			void main() {
-				gl_FragColor = vec4(1.0, 1.0, 1.0, 1.0); 
+				float alpha = texture2D(t, mousePos).a;
+				gl_FragColor = alpha * foreground + (1.0 - alpha) * background;
 			}`
 	pixelProgram, err := util.CreateProgram(b.gl, vertShader, fragShader)
 	if err != nil {
@@ -241,6 +251,8 @@ func (b *board) initTexture() {
 
 	b.gl.UseProgram(b.program)
 	util.SetInt(b.gl, b.program, "t", 0)
+	b.gl.UseProgram(b.pixelInspectorProgram)
+	util.SetInt(b.gl, b.pixelInspectorProgram, "t", 0)
 }
 
 func (b *board) setTextureData(data []byte) {
@@ -342,6 +354,11 @@ func (b *board) SetColors(background, foreground mgl.Vec4) {
 	b.gl.UseProgram(b.program)
 	util.SetVec4(b.gl, b.program, "background", background)
 	util.SetVec4(b.gl, b.program, "foreground", foreground)
+
+	b.gl.UseProgram(b.pixelInspectorProgram)
+	util.SetVec4(b.gl, b.pixelInspectorProgram, "background", background)
+	util.SetVec4(b.gl, b.pixelInspectorProgram, "foreground", foreground)
+
 }
 
 func (b *board) draw() {
@@ -373,6 +390,7 @@ func (b *board) draw() {
 	b.gl.Disable(webgl.SCISSOR_TEST)
 
 	b.gl.UseProgram(b.pixelInspectorProgram)
+	util.SetVec2(b.gl, b.pixelInspectorProgram, "mousePos", mgl.Vec2{b.mouseX, b.mouseY})
 	b.pixelPosBuff.BindToAttrib(b.gl, b.pixelInspectorProgram, "a_position")
 	b.gl.DrawArrays(webgl.TRIANGLES, 0, b.pixelPosBuff.VertexCount)
 
