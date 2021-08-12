@@ -6,6 +6,8 @@ import (
 	"github.com/nicholasblaskey/webgl/webgl"
 	"syscall/js"
 
+	"math/rand"
+
 	mgl "github.com/go-gl/mathgl/mgl32"
 	"github.com/nicholasblaskey/webgl-utils/util"
 )
@@ -89,7 +91,7 @@ func (b *board) initPixelInspector() {
 			b.mouseX, b.mouseY = x, y
 			// TODO change to .Width and .Height
 			b.mouseX = x / float32(b.canvas.Get("width").Int())
-			b.mouseY = y / float32(b.canvas.Get("height").Int())
+			b.mouseY = 1.0 - y/float32(b.canvas.Get("height").Int())
 			fmt.Println(b.mouseX, b.mouseY)
 
 			if b.pixelInspectorOn {
@@ -412,17 +414,35 @@ func main() {
 
 	fmt.Println("starting")
 
-	data := []byte{}
-	white := false
-	for i := 0; i < b.Width; i++ {
-		white = i%2 == 0
-		for j := 0; j < b.Height; j++ {
-			if white {
-				data = append(data, 255)
-			} else {
-				data = append(data, 0)
+	/*
+		data := []byte{}
+		white := false
+		for i := 0; i < b.Width; i++ {
+			white = i%2 == 0
+			for j := 0; j < b.Height; j++ {
+				if white {
+					data = append(data, 255)
+				} else {
+					data = append(data, 0)
+				}
+				white = !white
 			}
-			white = !white
+		}
+		b.SetPixels(data)
+	*/
+	data := []byte{}
+	for i := 0; i < b.Width/10; i++ {
+		col1, col2 := byte(rand.Int31n(256)), byte(rand.Int31n(256))
+
+		for k := 0; k < 10; k++ {
+
+			for j := 0; j < b.Height/2; j++ {
+				data = append(data, col1)
+			}
+			for j := b.Height / 2; j < b.Height; j++ {
+				data = append(data, col2)
+			}
+
 		}
 	}
 	b.SetPixels(data)
