@@ -32,6 +32,7 @@ type board struct {
 	pixelInspectorOn      bool
 	mouseX                int
 	mouseY                int
+	numSquares            int // numSquares x numSquares squares in pixel inspector
 	//
 	texture       *webgl.Texture
 	program       *webgl.Program
@@ -50,6 +51,7 @@ func New(canvas js.Value) (*board, error) {
 	//
 	b := &board{Width: 12, Height: 12,
 		gl: gl, canvas: canvas, ZoomFactor: 0.05, TranslationSpeed: 0.003,
+		numSquares: 10,
 	}
 
 	err = b.initShaders()
@@ -204,13 +206,16 @@ func (b *board) initShaders() error {
 			attribute vec2 a_position;
 
 			void main() {
-				gl_Position = vec4(a_position, 0.0, 1.0);
+				// Transform position from [0.0, 1.0] to [-1.0, 1.0]
+				//vec2 pos = (a_position - 0.5) * 2.0;
+				vec2 pos = a_position;
+				gl_Position = vec4(pos, 0.0, 1.0);
 			}`
 
 	fragShader = `
 			precision mediump float;
 			void main() {
-				gl_FragColor = vec4(1.0, 0.0, 1.0, 1.0); 
+				gl_FragColor = vec4(1.0, 1.0, 1.0, 1.0); 
 			}`
 	pixelProgram, err := util.CreateProgram(b.gl, vertShader, fragShader)
 	if err != nil {
@@ -277,14 +282,53 @@ func (b *board) initPositions() {
 	b.positionsBuff = util.NewBufferVec2(b.gl)
 	b.positionsBuff.BindData(b.gl, b.positions)
 
-	b.pixelPos = []float32{
-		-0.99, +0.99,
-		-0.99, -0.99,
-		+0.99, -0.99,
-		-0.99, +0.99,
-		+0.99, -0.99,
-		+0.99, +0.99,
+	b.pixelPos = []float32{}
+	quad := []float32{
+		0.30, 0.70,
+		0.30, 0.30,
+		0.70, 0.70,
+		0.70, 0.30,
 	}
+
+	for i := 0; i < len(quad); i++ {
+		// Multiply by size factor
+		quad[i] = quad[i] / 10
+
+		// Multiply by border factor
+		//quad[i] = quad[i] * 0.9
+	}
+	fmt.Println(quad)
+
+	translations := []mgl.Vec2{}
+	xOffset := 1.0 / float32(b.numSquares)
+	yOffset := 1.0 / float32(b.numSquares)
+	for y := -b.numSquares; y < b.numSquares; y += 2 {
+		for x := -b.numSquares; x < b.numSquares; x += 2 {
+			translations = append(translations,
+				mgl.Vec2{float32(x)/float32(b.numSquares) + xOffset,
+					float32(y)/float32(b.numSquares) + yOffset})
+		}
+	}
+	for _, trans := range translations {
+		for i := 0; i < len(quad); i += 2 {
+			b.pixelPos = append(b.pixelPos, quad[i]+trans[0], quad[i+1]+trans[1])
+		}
+	}
+
+	/*
+		for i := 0; i < b.numSquares; i++ {
+			for j := 0; j < b.numSquares; j++ {
+				xShift := (float32(i) / float32(b.numSquares))
+				fmt.Println(xShift)
+				yShift := float32(0)
+				for i := 0; i < len(quad); i += 2 {
+					b.pixelPos = append(b.pixelPos, quad[i]+xShift, quad[i+1]+yShift)
+				}
+			}
+		}
+		//	fmt.Println(b.pixelPos)
+	*/
+
 	b.gl.UseProgram(b.pixelInspectorProgram)
 	b.pixelPosBuff = util.NewBufferVec2(b.gl)
 	b.pixelPosBuff.BindData(b.gl, b.pixelPos)
@@ -326,7 +370,7 @@ func (b *board) draw() {
 
 	b.gl.UseProgram(b.pixelInspectorProgram)
 	b.pixelPosBuff.BindToAttrib(b.gl, b.pixelInspectorProgram, "a_position")
-	b.gl.DrawArrays(webgl.TRIANGLES, 0, b.pixelPosBuff.VertexCount)
+	b.gl.DrawArrays(webgl.TRIANGLE_STRIP, 0, b.pixelPosBuff.VertexCount)
 
 	// Read the pixels from the texture.
 
