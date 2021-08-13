@@ -184,6 +184,12 @@ func (b *board) applyTranslation(xStart, yStart, x, y float32) {
 	b.gl.UseProgram(b.program)
 	util.SetVec2(b.gl, b.program, "translation", b.translation)
 
+	// [2, 0] => [1, 2]
+	pixelTrans := b.translation.Mul(0.5)
+	fmt.Println("pixelTrans,bTranlastions", pixelTrans, b.translation)
+	b.gl.UseProgram(b.pixelInspectorProgram)
+	util.SetVec2(b.gl, b.pixelInspectorProgram, "translation", pixelTrans)
+
 	b.draw()
 }
 
@@ -260,9 +266,10 @@ func (b *board) initShaders() error {
 			uniform vec2 mousePos;
 			uniform vec4 foreground;
 			uniform vec4 background;
+			uniform vec2 translation;
 			varying vec2 offset;
 			void main() {
-				float alpha = texture2D(t, mousePos + offset).a;
+				float alpha = texture2D(t, mousePos + offset + translation).a;
 				gl_FragColor = alpha * foreground + (1.0 - alpha) * background;
 			}`
 	pixelProgram, err := util.CreateProgram(b.gl, vertShader, fragShader)
