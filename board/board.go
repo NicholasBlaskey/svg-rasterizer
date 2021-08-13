@@ -54,7 +54,7 @@ func New(canvas js.Value) (*board, error) {
 	//b := &board{
 	//
 	b := &board{gl: gl, canvas: canvas, ZoomFactor: 0.05, TranslationSpeed: 0.003,
-		numSquares: 16,
+		numSquares: 15,
 		//Width:      12, Height: 12,
 		Width: canvas.Get("height").Int(), Height: canvas.Get("width").Int(),
 	}
@@ -88,6 +88,8 @@ func (b *board) EnablePixelInspector(shouldTurnOn bool) {
 
 func (b *board) initPixelInspector() {
 	// Always have the pixel inspector on and listening
+	texelSizeX := 1 / float32(b.canvas.Get("width").Int())
+	texelSizeY := 1 / float32(b.canvas.Get("height").Int())
 	b.canvas.Call("addEventListener", "mousemove",
 		js.FuncOf(func(this js.Value, args []js.Value) interface{} {
 			x, y := getXAndYFromEvent(args[0])
@@ -96,10 +98,8 @@ func (b *board) initPixelInspector() {
 
 			// Add in a small value to ensure we are near the center of a pixel
 			// not on the edge of a pixel.
-			b.mouseX = x/float32(b.canvas.Get("width").Int()) + 0.001
-			b.mouseY = 1.0 - y/float32(b.canvas.Get("height").Int()) + 0.001
-
-			fmt.Println(b.mouseX, b.mouseY, x, y)
+			b.mouseX = x*texelSizeX + texelSizeX/2
+			b.mouseY = 1.0 - y*texelSizeY + texelSizeY/2
 
 			if b.pixelInspectorOn {
 				b.draw()
@@ -183,6 +183,7 @@ func (b *board) applyTranslation(xStart, yStart, x, y float32) {
 
 	b.gl.UseProgram(b.program)
 	util.SetVec2(b.gl, b.program, "translation", b.translation)
+
 	b.draw()
 }
 
@@ -426,7 +427,7 @@ func main() {
 	}
 	b.EnablePixelInspector(true)
 
-	fmt.Println("starting")
+	fmt.Println("starting", rand.Int31n(256))
 
 	/*
 		data := []byte{}
