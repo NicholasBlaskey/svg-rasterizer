@@ -34,7 +34,9 @@ type board struct {
 	pixelInspectorOn      bool
 	mouseX                float32
 	mouseY                float32
-	numSquares            int // numSquares x numSquares squares in pixel inspector
+	numSquares            int       // numSquares x numSquares squares in pixel inspector
+	offsets               []float32 // Amount to add to the texture coordinate to get to the pixel from the center.
+	offsetsBuff           *util.Buffer
 	//
 	texture       *webgl.Texture
 	program       *webgl.Program
@@ -69,6 +71,7 @@ func New(canvas js.Value) (*board, error) {
 	b.initZoomListener()
 	b.initTranslationListener()
 	b.initPixelInspector()
+	b.initPixelInspectorOffsets()
 
 	b.SetColors(mgl.Vec4{6 / 255.0, 35 / 255.0, 41 / 255.0, 1.0},
 		mgl.Vec4{140 / 255.0, 222 / 255.0, 148 / 255.0, 1.0})
@@ -90,9 +93,13 @@ func (b *board) initPixelInspector() {
 			x, y := getXAndYFromEvent(args[0])
 			b.mouseX, b.mouseY = x, y
 			// TODO change to .Width and .Height
-			b.mouseX = x / float32(b.canvas.Get("width").Int())
-			b.mouseY = 1.0 - y/float32(b.canvas.Get("height").Int())
-			fmt.Println(b.mouseX, b.mouseY)
+
+			// Add in a small value to ensure we are near the center of a pixel
+			// not on the edge of a pixel.
+			b.mouseX = x/float32(b.canvas.Get("width").Int()) + 0.001
+			b.mouseY = 1.0 - y/float32(b.canvas.Get("height").Int()) + 0.001
+
+			fmt.Println(b.mouseX, b.mouseY, x, y)
 
 			if b.pixelInspectorOn {
 				b.draw()
@@ -100,6 +107,33 @@ func (b *board) initPixelInspector() {
 
 			return nil
 		}))
+}
+
+func (b *board) initPixelInspectorOffsets() {
+	b.offsets = []float32{}
+	texelSizeX, texelSizeY := 1.0/float32(b.Width), 1.0/float32(b.Height)
+	centerX, centerY := b.numSquares, b.numSquares
+
+	for y := 0; y < b.numSquares; y++ {
+		for x := 0; x < b.numSquares; x++ {
+			xOffset := float32(x-centerX) * texelSizeX
+			yOffset := float32(y-centerY) * texelSizeY
+
+			// Repeat 4 times since each quad has 6 vertices.
+			b.offsets = append(b.offsets,
+				xOffset, yOffset,
+				xOffset, yOffset,
+				xOffset, yOffset,
+				xOffset, yOffset,
+				xOffset, yOffset,
+				xOffset, yOffset,
+			)
+		}
+	}
+
+	b.gl.UseProgram(b.pixelInspectorProgram)
+	b.offsetsBuff = util.NewBufferVec2(b.gl)
+	b.offsetsBuff.BindData(b.gl, b.offsets)
 }
 
 func getXAndYFromEvent(e js.Value) (float32, float32) {
@@ -211,12 +245,12 @@ func (b *board) initShaders() error {
 
 	vertShader = `
 			attribute vec2 a_position;
-
+			attribute vec2 a_offset;
+			varying vec2 offset;
 			void main() {
-				// Transform position from [0.0, 1.0] to [-1.0, 1.0]
-				//vec2 pos = (a_position - 0.5) * 2.0;
 				vec2 pos = a_position;
 				gl_Position = vec4(pos, 0.0, 1.0);
+				offset = a_offset;
 			}`
 
 	fragShader = `
@@ -225,8 +259,9 @@ func (b *board) initShaders() error {
 			uniform vec2 mousePos;
 			uniform vec4 foreground;
 			uniform vec4 background;
+			varying vec2 offset;
 			void main() {
-				float alpha = texture2D(t, mousePos).a;
+				float alpha = texture2D(t, mousePos + offset).a;
 				gl_FragColor = alpha * foreground + (1.0 - alpha) * background;
 			}`
 	pixelProgram, err := util.CreateProgram(b.gl, vertShader, fragShader)
@@ -297,15 +332,6 @@ func (b *board) initPositions() {
 	b.positionsBuff.BindData(b.gl, b.positions)
 
 	b.pixelPos = []float32{}
-	/*
-		quad := []float32{
-			0.30, 0.70,
-			0.30, 0.30,
-			0.70, 0.70,
-			0.70, 0.30,
-		}
-	*/
-
 	translations := []mgl.Vec2{}
 	xOffset := 1.0 / float32(b.numSquares)
 	yOffset := 1.0 / float32(b.numSquares)
@@ -332,20 +358,6 @@ func (b *board) initPositions() {
 			b.pixelPos = append(b.pixelPos, quad[i]+trans[0], quad[i+1]+trans[1])
 		}
 	}
-
-	/*
-		for i := 0; i < b.numSquares; i++ {
-			for j := 0; j < b.numSquares; j++ {
-				xShift := (float32(i) / float32(b.numSquares))
-				fmt.Println(xShift)
-				yShift := float32(0)
-				for i := 0; i < len(quad); i += 2 {
-					b.pixelPos = append(b.pixelPos, quad[i]+xShift, quad[i+1]+yShift)
-				}
-			}
-		}
-		//	fmt.Println(b.pixelPos)
-	*/
 
 	b.gl.UseProgram(b.pixelInspectorProgram)
 	b.pixelPosBuff = util.NewBufferVec2(b.gl)
@@ -393,6 +405,8 @@ func (b *board) draw() {
 
 	b.gl.UseProgram(b.pixelInspectorProgram)
 	util.SetVec2(b.gl, b.pixelInspectorProgram, "mousePos", mgl.Vec2{b.mouseX, b.mouseY})
+
+	b.offsetsBuff.BindToAttrib(b.gl, b.pixelInspectorProgram, "a_offset")
 	b.pixelPosBuff.BindToAttrib(b.gl, b.pixelInspectorProgram, "a_position")
 	b.gl.DrawArrays(webgl.TRIANGLES, 0, b.pixelPosBuff.VertexCount)
 
@@ -430,6 +444,7 @@ func main() {
 		}
 		b.SetPixels(data)
 	*/
+
 	data := []byte{}
 	for i := 0; i < b.Width/10; i++ {
 		col1, col2 := byte(rand.Int31n(256)), byte(rand.Int31n(256))
@@ -442,7 +457,6 @@ func main() {
 			for j := b.Height / 2; j < b.Height; j++ {
 				data = append(data, col2)
 			}
-
 		}
 	}
 	b.SetPixels(data)
