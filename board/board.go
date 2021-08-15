@@ -217,6 +217,10 @@ func (b *board) initZoomListener() {
 func (b *board) setZoom(zoom float32) {
 	b.gl.UseProgram(b.program)
 	util.SetFloat(b.gl, b.program, "zoomFactor", zoom)
+
+	b.gl.UseProgram(b.pixelInspectorProgram)
+	util.SetFloat(b.gl, b.pixelInspectorProgram, "zoomFactor", zoom)
+	fmt.Println("ZOOM", mgl.Vec2{b.mouseX, b.mouseY}, zoom) //x
 }
 
 func (b *board) initShaders() error {
@@ -266,10 +270,19 @@ func (b *board) initShaders() error {
 			uniform vec4 foreground;
 			uniform vec4 background;
 			uniform vec2 translation;
+			uniform float zoomFactor;
 			varying vec2 offset;
 			void main() {
-				float alpha = texture2D(t, mousePos + offset + translation).a;
-				gl_FragColor = alpha * foreground + (1.0 - alpha) * background;
+				vec2 texCoord = (mousePos * zoomFactor) + offset + translation;
+								
+				if (texCoord.x > 0.0 && texCoord.x < 1.0 &&
+					texCoord.y > 0.0 && texCoord.y < 1.0) {
+
+					float alpha = texture2D(t, texCoord).a;
+					gl_FragColor = alpha * foreground + (1.0 - alpha) * background;
+				} else {
+					gl_FragColor = vec4(1.0, 1.0, 1.0, 1.0);
+				}
 			}`
 	pixelProgram, err := util.CreateProgram(b.gl, vertShader, fragShader)
 	if err != nil {
