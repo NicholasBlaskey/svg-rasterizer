@@ -112,7 +112,7 @@ func (b *board) initPixelInspector() {
 func (b *board) initPixelInspectorOffsets() {
 	b.offsets = []float32{}
 	texelSizeX, texelSizeY := 1.0/float32(b.Width), 1.0/float32(b.Height)
-	centerX, centerY := b.numSquares, b.numSquares
+	centerX, centerY := b.numSquares/2, b.numSquares/2
 
 	for y := 0; y < b.numSquares; y++ {
 		for x := 0; x < b.numSquares; x++ {
@@ -273,10 +273,10 @@ func (b *board) initShaders() error {
 			uniform float zoomFactor;
 			varying vec2 offset;
 			void main() {
-				vec2 texCoord = (mousePos * zoomFactor) + offset + translation;
+				vec2 texCoord = (mousePos / zoomFactor) + offset + translation;
 								
-				if (texCoord.x > 0.0 && texCoord.x < 1.0 &&
-					texCoord.y > 0.0 && texCoord.y < 1.0) {
+				if (texCoord.x >= 0.0 && texCoord.x <= 1.0 &&
+					texCoord.y >= 0.0 && texCoord.y <= 1.0) {
 
 					float alpha = texture2D(t, texCoord).a;
 					gl_FragColor = alpha * foreground + (1.0 - alpha) * background;
