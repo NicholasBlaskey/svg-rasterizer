@@ -184,8 +184,7 @@ func (b *board) applyTranslation(xStart, yStart, x, y float32) {
 	b.gl.UseProgram(b.program)
 	util.SetVec2(b.gl, b.program, "translation", b.translation)
 
-	// [2, 0] => [1, 2]
-	pixelTrans := b.translation.Mul(0.5)
+	pixelTrans := b.translation.Mul(-0.5)
 	fmt.Println("pixelTrans,bTranlastions", pixelTrans, b.translation)
 	b.gl.UseProgram(b.pixelInspectorProgram)
 	util.SetVec2(b.gl, b.pixelInspectorProgram, "translation", pixelTrans)
