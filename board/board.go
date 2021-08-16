@@ -42,6 +42,8 @@ type board struct {
 	program       *webgl.Program
 	colorsIndBuff *util.Buffer
 	colorsInd     []float32 // Color indicator 0 => background, 1 => foreground
+	//
+	zoomFactor float32
 }
 
 func New(canvas js.Value) (*board, error) {
@@ -215,14 +217,16 @@ func (b *board) initZoomListener() {
 }
 
 func (b *board) setZoom(zoom float32) {
+	b.zoomFactor = zoom
+
 	b.gl.UseProgram(b.program)
 	util.SetFloat(b.gl, b.program, "zoomFactor", zoom)
 
 	b.gl.UseProgram(b.pixelInspectorProgram)
 	util.SetFloat(b.gl, b.pixelInspectorProgram, "zoomFactor", zoom)
 
-	fmt.Println("ZOOM", mgl.Vec2{b.mouseX, b.mouseY}, zoom,
-		mgl.Vec2{b.mouseX / zoom, b.mouseY / zoom}) //x
+	//fmt.Println("ZOOM", mgl.Vec2{b.mouseX, b.mouseY}, zoom,
+	//	mgl.Vec2{b.mouseX / zoom, b.mouseY / zoom}) //x
 }
 
 func (b *board) initShaders() error {
@@ -304,10 +308,9 @@ func (b *board) initShaders() error {
 			varying vec2 offset;
 			void main() {
 				// TODO figure out this zoomFactor
-				vec2 texCoord = ((mousePos - 0.5) * 2.0) * zoomFactor; //+ translation + offset;
+				vec2 texCoord = mousePos;//((mousePos - 0.5) * 2.0) * zoomFactor; //+ translation + offset;
 				
 				// starts [0, 1] convert to [-1, 1] back to [0, 1]
-				texCoord = (texCoord / 2.0 + 0.5);
 				if (texCoord.x >= 0.0 && texCoord.x <= 1.0 &&
 					texCoord.y >= 0.0 && texCoord.y <= 1.0) {
 
@@ -457,9 +460,19 @@ func (b *board) draw() {
 	b.gl.Disable(webgl.SCISSOR_TEST)
 
 	b.gl.UseProgram(b.pixelInspectorProgram)
-	util.SetVec2(b.gl, b.pixelInspectorProgram, "mousePos", mgl.Vec2{b.mouseX, b.mouseY})
 
-	b.offsetsBuff.BindToAttrib(b.gl, b.pixelInspectorProgram, "a_offset")
+	mousePos := mgl.Vec2{b.mouseX, b.mouseY}
+	fmt.Println("starting mouse pos [0, 1] |", mousePos)
+	mousePos = mousePos.Sub(mgl.Vec2{0.5, 0.5}).Mul(2.0)
+	fmt.Println("mouse pos [-1, 1] |", mousePos)
+	mousePos = mousePos.Mul(1 / b.zoomFactor)
+	fmt.Println("mouse pos and zoom factored in |", mousePos)
+	mousePos = mousePos.Mul(0.5).Add(mgl.Vec2{0.5, 0.5})
+	fmt.Println("ending mouse pos [0, 1] |", mousePos)
+
+	util.SetVec2(b.gl, b.pixelInspectorProgram, "mousePos", mousePos)
+
+	//b.offsetsBuff.BindToAttrib(b.gl, b.pixelInspectorProgram, "a_offset") // UNCOMMENT
 	b.pixelPosBuff.BindToAttrib(b.gl, b.pixelInspectorProgram, "a_position")
 	b.gl.DrawArrays(webgl.TRIANGLES, 0, b.pixelPosBuff.VertexCount)
 
