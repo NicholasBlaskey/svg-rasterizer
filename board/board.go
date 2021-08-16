@@ -220,10 +220,40 @@ func (b *board) setZoom(zoom float32) {
 
 	b.gl.UseProgram(b.pixelInspectorProgram)
 	util.SetFloat(b.gl, b.pixelInspectorProgram, "zoomFactor", zoom)
-	fmt.Println("ZOOM", mgl.Vec2{b.mouseX, b.mouseY}, zoom) //x
+
+	fmt.Println("ZOOM", mgl.Vec2{b.mouseX, b.mouseY}, zoom,
+		mgl.Vec2{b.mouseX / zoom, b.mouseY / zoom}) //x
 }
 
 func (b *board) initShaders() error {
+	// the main shader has
+	// positions go from (-1.0, -1.0) to (1.0, 1.0)
+	// zoomFactor will multiply these to become (positions*zoomFactor)
+	// texture coordinates will still be (0.0, 0.0) to (1.0, 1.0)
+	//
+	// the pixelInspectorShader has
+	// mousePos from (0.0, 0.0) to (1.0, 1.0)
+	// then we takae the texture coordinate of this
+	//
+	// suppose a 4 x 4 texture with 1.5 zoom
+	// a b c d    f f g g
+	// e f g h => f f g g
+	// i k l m    k k l l
+	// n o p q    k k l l
+	//
+	// okay what if we sub texture?
+	// That is how would we get the coordinate range of the sub texture?
+	// Only focus on the zoomFactor now we will figure out the other aspect later.
+	//
+	// So to subtexture we would take the texture coordinates from (0.0, 0.0) to (1.0, 1.0)
+	// and transform these into (0.25, 0.25) to (0.75, 0.75).
+	//
+	// So how would we figure out the leftmost point from the zoomfactor?
+	// 1.5x zoom?
+	//
+	// for example
+	// texCoord = (0.0, 0.0) => 1 / texCoord
+
 	vertShader := `
 			attribute vec2 a_position;
 			attribute vec2 a_texCoord;			
@@ -273,8 +303,11 @@ func (b *board) initShaders() error {
 			uniform float zoomFactor;
 			varying vec2 offset;
 			void main() {
-				vec2 texCoord = (mousePos / zoomFactor) + offset + translation;
-								
+				// TODO figure out this zoomFactor
+				vec2 texCoord = ((mousePos - 0.5) * 2.0) * zoomFactor; //+ translation + offset;
+				
+				// starts [0, 1] convert to [-1, 1] back to [0, 1]
+				texCoord = (texCoord / 2.0 + 0.5);
 				if (texCoord.x >= 0.0 && texCoord.x <= 1.0 &&
 					texCoord.y >= 0.0 && texCoord.y <= 1.0) {
 
