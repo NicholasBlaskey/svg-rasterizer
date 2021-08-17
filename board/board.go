@@ -100,8 +100,9 @@ func (b *board) initPixelInspector() {
 
 			// Add in a small value to ensure we are near the center of a pixel
 			// not on the edge of a pixel.
-			b.mouseX = x*texelSizeX + texelSizeX/2
-			b.mouseY = 1.0 - y*texelSizeY + texelSizeY/2
+			b.mouseX = (x*texelSizeX + texelSizeX/2 - 0.5) * 2.0
+			b.mouseY = (1.0 - y*texelSizeY + texelSizeY/2 - 0.5) * 2.0
+			fmt.Println(b.mouseX, b.mouseY)
 
 			if b.pixelInspectorOn {
 				b.draw()
@@ -186,10 +187,10 @@ func (b *board) applyTranslation(xStart, yStart, x, y float32) {
 	b.gl.UseProgram(b.program)
 	util.SetVec2(b.gl, b.program, "translation", b.translation)
 
-	pixelTrans := b.translation.Mul(-0.5)
-	fmt.Println("pixelTrans,bTranlastions", pixelTrans, b.translation)
+	//pixelTrans := b.translation.Mul(-1.0)
+	//fmt.Println("pixelTrans,bTranlastions", pixelTrans, b.translation)
 	b.gl.UseProgram(b.pixelInspectorProgram)
-	util.SetVec2(b.gl, b.pixelInspectorProgram, "translation", pixelTrans)
+	util.SetVec2(b.gl, b.pixelInspectorProgram, "translation", b.translation)
 
 	b.draw()
 }
@@ -220,44 +221,16 @@ func (b *board) setZoom(zoom float32) {
 	b.zoomFactor = zoom
 
 	b.gl.UseProgram(b.program)
-	util.SetFloat(b.gl, b.program, "zoomFactor", zoom)
+	util.SetFloat(b.gl, b.program, "zoomFactor", b.zoomFactor)
 
 	b.gl.UseProgram(b.pixelInspectorProgram)
-	util.SetFloat(b.gl, b.pixelInspectorProgram, "zoomFactor", zoom)
+	util.SetFloat(b.gl, b.pixelInspectorProgram, "zoomFactor", b.zoomFactor)
 
 	//fmt.Println("ZOOM", mgl.Vec2{b.mouseX, b.mouseY}, zoom,
 	//	mgl.Vec2{b.mouseX / zoom, b.mouseY / zoom}) //x
 }
 
 func (b *board) initShaders() error {
-	// the main shader has
-	// positions go from (-1.0, -1.0) to (1.0, 1.0)
-	// zoomFactor will multiply these to become (positions*zoomFactor)
-	// texture coordinates will still be (0.0, 0.0) to (1.0, 1.0)
-	//
-	// the pixelInspectorShader has
-	// mousePos from (0.0, 0.0) to (1.0, 1.0)
-	// then we takae the texture coordinate of this
-	//
-	// suppose a 4 x 4 texture with 1.5 zoom
-	// a b c d    f f g g
-	// e f g h => f f g g
-	// i k l m    k k l l
-	// n o p q    k k l l
-	//
-	// okay what if we sub texture?
-	// That is how would we get the coordinate range of the sub texture?
-	// Only focus on the zoomFactor now we will figure out the other aspect later.
-	//
-	// So to subtexture we would take the texture coordinates from (0.0, 0.0) to (1.0, 1.0)
-	// and transform these into (0.25, 0.25) to (0.75, 0.75).
-	//
-	// So how would we figure out the leftmost point from the zoomfactor?
-	// 1.5x zoom?
-	//
-	// for example
-	// texCoord = (0.0, 0.0) => 1 / texCoord
-
 	vertShader := `
 			attribute vec2 a_position;
 			attribute vec2 a_texCoord;			
@@ -308,9 +281,11 @@ func (b *board) initShaders() error {
 			varying vec2 offset;
 			void main() {
 				// TODO figure out this zoomFactor
-				vec2 texCoord = mousePos;//((mousePos - 0.5) * 2.0) * zoomFactor; //+ translation + offset;
-				
-				// starts [0, 1] convert to [-1, 1] back to [0, 1]
+				vec2 texCoord = (mousePos - translation) / zoomFactor; - translation; //* (1.0 / zoomFactor);
+
+				//((mousePos - 0.5) * 2.0) * zoomFactor; //+ translation + offset;
+
+				texCoord = (texCoord / 2.0) + 0.5 + offset;
 				if (texCoord.x >= 0.0 && texCoord.x <= 1.0 &&
 					texCoord.y >= 0.0 && texCoord.y <= 1.0) {
 
@@ -462,17 +437,19 @@ func (b *board) draw() {
 	b.gl.UseProgram(b.pixelInspectorProgram)
 
 	mousePos := mgl.Vec2{b.mouseX, b.mouseY}
-	fmt.Println("starting mouse pos [0, 1] |", mousePos)
-	mousePos = mousePos.Sub(mgl.Vec2{0.5, 0.5}).Mul(2.0)
-	fmt.Println("mouse pos [-1, 1] |", mousePos)
-	mousePos = mousePos.Mul(1 / b.zoomFactor)
-	fmt.Println("mouse pos and zoom factored in |", mousePos)
-	mousePos = mousePos.Mul(0.5).Add(mgl.Vec2{0.5, 0.5})
-	fmt.Println("ending mouse pos [0, 1] |", mousePos)
 
+	/*
+		fmt.Println("starting mouse pos [0, 1] |", mousePos)
+		mousePos = mousePos.Sub(mgl.Vec2{0.5, 0.5}).Mul(2.0)
+		fmt.Println("mouse pos [-1, 1] |", mousePos)
+		mousePos = mousePos.Mul(1 / b.zoomFactor)
+		fmt.Println("mouse pos and zoom factored in |", mousePos)
+		mousePos = mousePos.Mul(0.5).Add(mgl.Vec2{0.5, 0.5})
+		fmt.Println("ending mouse pos [0, 1] |", mousePos)
+	*/
 	util.SetVec2(b.gl, b.pixelInspectorProgram, "mousePos", mousePos)
 
-	//b.offsetsBuff.BindToAttrib(b.gl, b.pixelInspectorProgram, "a_offset") // UNCOMMENT
+	b.offsetsBuff.BindToAttrib(b.gl, b.pixelInspectorProgram, "a_offset")
 	b.pixelPosBuff.BindToAttrib(b.gl, b.pixelInspectorProgram, "a_position")
 	b.gl.DrawArrays(webgl.TRIANGLES, 0, b.pixelPosBuff.VertexCount)
 
