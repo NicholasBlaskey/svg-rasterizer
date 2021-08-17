@@ -42,8 +42,6 @@ type board struct {
 	program       *webgl.Program
 	colorsIndBuff *util.Buffer
 	colorsInd     []float32 // Color indicator 0 => background, 1 => foreground
-	//
-	zoomFactor float32
 }
 
 func New(canvas js.Value) (*board, error) {
@@ -53,8 +51,6 @@ func New(canvas js.Value) (*board, error) {
 	}
 
 	// TODO ensure (width * height) % 4 == 0
-	//b := &board{
-	//
 	b := &board{gl: gl, canvas: canvas, ZoomFactor: 0.05, TranslationSpeed: 0.003,
 		numSquares: 15,
 		//Width:      12, Height: 12,
@@ -90,13 +86,12 @@ func (b *board) EnablePixelInspector(shouldTurnOn bool) {
 
 func (b *board) initPixelInspector() {
 	// Always have the pixel inspector on and listening
-	texelSizeX := 1 / float32(b.canvas.Get("width").Int())
-	texelSizeY := 1 / float32(b.canvas.Get("height").Int())
+	texelSizeX := 1.0 / float32(b.Width)
+	texelSizeY := 1.0 / float32(b.Height)
 	b.canvas.Call("addEventListener", "mousemove",
 		js.FuncOf(func(this js.Value, args []js.Value) interface{} {
 			x, y := getXAndYFromEvent(args[0])
 			b.mouseX, b.mouseY = x, y
-			// TODO change to .Width and .Height
 
 			// Add in a small value to ensure we are near the center of a pixel
 			// not on the edge of a pixel.
@@ -187,8 +182,6 @@ func (b *board) applyTranslation(xStart, yStart, x, y float32) {
 	b.gl.UseProgram(b.program)
 	util.SetVec2(b.gl, b.program, "translation", b.translation)
 
-	//pixelTrans := b.translation.Mul(-1.0)
-	//fmt.Println("pixelTrans,bTranlastions", pixelTrans, b.translation)
 	b.gl.UseProgram(b.pixelInspectorProgram)
 	util.SetVec2(b.gl, b.pixelInspectorProgram, "translation", b.translation)
 
@@ -218,16 +211,11 @@ func (b *board) initZoomListener() {
 }
 
 func (b *board) setZoom(zoom float32) {
-	b.zoomFactor = zoom
-
 	b.gl.UseProgram(b.program)
-	util.SetFloat(b.gl, b.program, "zoomFactor", b.zoomFactor)
+	util.SetFloat(b.gl, b.program, "zoomFactor", zoom)
 
 	b.gl.UseProgram(b.pixelInspectorProgram)
-	util.SetFloat(b.gl, b.pixelInspectorProgram, "zoomFactor", b.zoomFactor)
-
-	//fmt.Println("ZOOM", mgl.Vec2{b.mouseX, b.mouseY}, zoom,
-	//	mgl.Vec2{b.mouseX / zoom, b.mouseY / zoom}) //x
+	util.SetFloat(b.gl, b.pixelInspectorProgram, "zoomFactor", zoom)
 }
 
 func (b *board) initShaders() error {
@@ -280,11 +268,9 @@ func (b *board) initShaders() error {
 			uniform float zoomFactor;
 			varying vec2 offset;
 			void main() {
-				// TODO figure out this zoomFactor
-				vec2 texCoord = (mousePos - translation) / zoomFactor; - translation; //* (1.0 / zoomFactor);
+				vec2 texCoord = (mousePos - translation) / zoomFactor; 
 
-				//((mousePos - 0.5) * 2.0) * zoomFactor; //+ translation + offset;
-
+				// Convert to texture coodinates of [0, 1] from [-1, 1]
 				texCoord = (texCoord / 2.0) + 0.5 + offset;
 				if (texCoord.x >= 0.0 && texCoord.x <= 1.0 &&
 					texCoord.y >= 0.0 && texCoord.y <= 1.0) {
@@ -407,10 +393,8 @@ func (b *board) SetColors(background, foreground mgl.Vec4) {
 }
 
 func (b *board) draw() {
-	w, h := b.canvas.Get("width").Int(), b.canvas.Get("height").Int()
-
 	// Draw the texture.
-	b.gl.Viewport(0.0, 0.0, w, h) // TODO change when we change the canvas size???
+	b.gl.Viewport(0.0, 0.0, b.Width, b.Height)
 
 	b.gl.UseProgram(b.program)
 	b.positionsBuff.BindToAttrib(b.gl, b.program, "a_position")
@@ -425,11 +409,11 @@ func (b *board) draw() {
 	}
 
 	// Draw the pixel inpector
-	b.gl.Viewport(w/2, h/2, w/2, h/2)
+	b.gl.Viewport(b.Width/2, b.Height/2, b.Width/2, b.Height/2)
 
 	// Draw black box around viewport to be used for pixel borders.
 	b.gl.Enable(webgl.SCISSOR_TEST)
-	b.gl.Scissor(w/2, h/2, w/2, h/2)
+	b.gl.Scissor(b.Width/2, b.Height/2, b.Width/2, b.Height/2)
 	b.gl.ClearColor(0.0, 0, 0.0, 1.0)
 	b.gl.Clear(webgl.COLOR_BUFFER_BIT)
 	b.gl.Disable(webgl.SCISSOR_TEST)
@@ -437,32 +421,18 @@ func (b *board) draw() {
 	b.gl.UseProgram(b.pixelInspectorProgram)
 
 	mousePos := mgl.Vec2{b.mouseX, b.mouseY}
-
-	/*
-		fmt.Println("starting mouse pos [0, 1] |", mousePos)
-		mousePos = mousePos.Sub(mgl.Vec2{0.5, 0.5}).Mul(2.0)
-		fmt.Println("mouse pos [-1, 1] |", mousePos)
-		mousePos = mousePos.Mul(1 / b.zoomFactor)
-		fmt.Println("mouse pos and zoom factored in |", mousePos)
-		mousePos = mousePos.Mul(0.5).Add(mgl.Vec2{0.5, 0.5})
-		fmt.Println("ending mouse pos [0, 1] |", mousePos)
-	*/
 	util.SetVec2(b.gl, b.pixelInspectorProgram, "mousePos", mousePos)
 
 	b.offsetsBuff.BindToAttrib(b.gl, b.pixelInspectorProgram, "a_offset")
 	b.pixelPosBuff.BindToAttrib(b.gl, b.pixelInspectorProgram, "a_position")
 	b.gl.DrawArrays(webgl.TRIANGLES, 0, b.pixelPosBuff.VertexCount)
-
-	// Read the pixels from the texture.
-
-	// Draw
 }
 
 func main() {
 	document := js.Global().Get("document")
 	canvas := document.Call("getElementById", "webgl")
-	canvas.Set("height", 800)
-	canvas.Set("width", 800)
+	canvas.Set("height", 1200)
+	canvas.Set("width", 1200)
 	b, err := New(canvas)
 	if err != nil {
 		panic(err)
