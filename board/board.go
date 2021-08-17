@@ -1,12 +1,10 @@
-package main
+package board
 
 import (
 	"fmt"
 
 	"github.com/nicholasblaskey/webgl/webgl"
 	"syscall/js"
-
-	"math/rand"
 
 	mgl "github.com/go-gl/mathgl/mgl32"
 	"github.com/nicholasblaskey/webgl-utils/util"
@@ -426,53 +424,4 @@ func (b *board) draw() {
 	b.offsetsBuff.BindToAttrib(b.gl, b.pixelInspectorProgram, "a_offset")
 	b.pixelPosBuff.BindToAttrib(b.gl, b.pixelInspectorProgram, "a_position")
 	b.gl.DrawArrays(webgl.TRIANGLES, 0, b.pixelPosBuff.VertexCount)
-}
-
-func main() {
-	document := js.Global().Get("document")
-	canvas := document.Call("getElementById", "webgl")
-	canvas.Set("height", 1200)
-	canvas.Set("width", 1200)
-	b, err := New(canvas)
-	if err != nil {
-		panic(err)
-	}
-	b.EnablePixelInspector(true)
-
-	fmt.Println("starting", rand.Int31n(256))
-
-	/*
-		data := []byte{}
-		white := false
-		for i := 0; i < b.Width; i++ {
-			white = i%2 == 0
-			for j := 0; j < b.Height; j++ {
-				if white {
-					data = append(data, 255)
-				} else {
-					data = append(data, 0)
-				}
-				white = !white
-			}
-		}
-		b.SetPixels(data)
-	*/
-
-	data := []byte{}
-	for i := 0; i < b.Width/10; i++ {
-		col1, col2 := byte(rand.Int31n(256)), byte(rand.Int31n(256))
-
-		for k := 0; k < 10; k++ {
-
-			for j := 0; j < b.Height/2; j++ {
-				data = append(data, col1)
-			}
-			for j := b.Height / 2; j < b.Height; j++ {
-				data = append(data, col2)
-			}
-		}
-	}
-	b.SetPixels(data)
-
-	<-make(chan bool) // Prevent program from exiting
 }
