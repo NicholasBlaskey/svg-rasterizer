@@ -1,8 +1,6 @@
 package board
 
 import (
-	"fmt"
-
 	"github.com/nicholasblaskey/webgl/webgl"
 	"syscall/js"
 
@@ -95,7 +93,6 @@ func (b *Board) initPixelInspector() {
 			// not on the edge of a pixel.
 			b.mouseX = (x*texelSizeX + texelSizeX/2 - 0.5) * 2.0
 			b.mouseY = (1.0 - y*texelSizeY + texelSizeY/2 - 0.5) * 2.0
-			fmt.Println(b.mouseX, b.mouseY)
 
 			if b.pixelInspectorOn {
 				b.draw()
