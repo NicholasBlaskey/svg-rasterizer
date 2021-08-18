@@ -9,9 +9,23 @@ import (
 	"github.com/nicholasblaskey/svg-rasterizer/board"
 )
 
+type rasterizer struct {
+	board *board.Board
+}
+
+func New(canvas js.Value, filePath string) *rasterizer {
+
+	fmt.Println(filePath)
+
+	return &rasterizer{}
+}
+
 func main() {
 	document := js.Global().Get("document")
 	canvas := document.Call("getElementById", "webgl")
+
+	New(canvas, "./svg/test1.svg")
+
 	canvas.Set("height", 800)
 	canvas.Set("width", 800)
 	b, err := board.New(canvas)

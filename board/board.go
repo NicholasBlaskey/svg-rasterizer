@@ -10,7 +10,7 @@ import (
 	"github.com/nicholasblaskey/webgl-utils/util"
 )
 
-type board struct {
+type Board struct {
 	Width  int
 	Height int
 	gl     *webgl.Gl
@@ -42,14 +42,14 @@ type board struct {
 	colorsInd     []float32 // Color indicator 0 => background, 1 => foreground
 }
 
-func New(canvas js.Value) (*board, error) {
+func New(canvas js.Value) (*Board, error) {
 	gl, err := webgl.FromCanvas(canvas)
 	if err != nil {
 		return nil, err
 	}
 
 	// TODO ensure (width * height) % 4 == 0
-	b := &board{gl: gl, canvas: canvas, ZoomFactor: 0.05, TranslationSpeed: 0.003,
+	b := &Board{gl: gl, canvas: canvas, ZoomFactor: 0.05, TranslationSpeed: 0.003,
 		numSquares: 15,
 		//Width:      12, Height: 12,
 		Width: canvas.Get("height").Int(), Height: canvas.Get("width").Int(),
@@ -77,12 +77,12 @@ func New(canvas js.Value) (*board, error) {
 	return b, nil
 }
 
-func (b *board) EnablePixelInspector(shouldTurnOn bool) {
+func (b *Board) EnablePixelInspector(shouldTurnOn bool) {
 	b.pixelInspectorOn = shouldTurnOn
 	b.draw()
 }
 
-func (b *board) initPixelInspector() {
+func (b *Board) initPixelInspector() {
 	// Always have the pixel inspector on and listening
 	texelSizeX := 1.0 / float32(b.Width)
 	texelSizeY := 1.0 / float32(b.Height)
@@ -105,7 +105,7 @@ func (b *board) initPixelInspector() {
 		}))
 }
 
-func (b *board) initPixelInspectorOffsets() {
+func (b *Board) initPixelInspectorOffsets() {
 	b.offsets = []float32{}
 	texelSizeX, texelSizeY := 1.0/float32(b.Width), 1.0/float32(b.Height)
 	centerX, centerY := b.numSquares/2, b.numSquares/2
@@ -139,7 +139,7 @@ func getXAndYFromEvent(e js.Value) (float32, float32) {
 	return x, y
 }
 
-func (b *board) initTranslationListener() {
+func (b *Board) initTranslationListener() {
 	isDown := false
 	xStart, yStart := float32(0.0), float32(0.0)
 	b.canvas.Call("addEventListener", "mousedown",
@@ -174,7 +174,7 @@ func (b *board) initTranslationListener() {
 		}))
 }
 
-func (b *board) applyTranslation(xStart, yStart, x, y float32) {
+func (b *Board) applyTranslation(xStart, yStart, x, y float32) {
 	b.translation = b.translation.Add(mgl.Vec2{x - xStart, yStart - y}.Mul(b.TranslationSpeed))
 
 	b.gl.UseProgram(b.program)
@@ -186,7 +186,7 @@ func (b *board) applyTranslation(xStart, yStart, x, y float32) {
 	b.draw()
 }
 
-func (b *board) initZoomListener() {
+func (b *Board) initZoomListener() {
 	zoomValue := float32(1.0)
 	b.setZoom(zoomValue)
 
@@ -208,7 +208,7 @@ func (b *board) initZoomListener() {
 	js.Global().Call("addEventListener", "wheel", eventFunc)
 }
 
-func (b *board) setZoom(zoom float32) {
+func (b *Board) setZoom(zoom float32) {
 	b.gl.UseProgram(b.program)
 	util.SetFloat(b.gl, b.program, "zoomFactor", zoom)
 
@@ -216,7 +216,7 @@ func (b *board) setZoom(zoom float32) {
 	util.SetFloat(b.gl, b.pixelInspectorProgram, "zoomFactor", zoom)
 }
 
-func (b *board) initShaders() error {
+func (b *Board) initShaders() error {
 	vertShader := `
 			attribute vec2 a_position;
 			attribute vec2 a_texCoord;			
@@ -288,7 +288,7 @@ func (b *board) initShaders() error {
 	return nil
 }
 
-func (b *board) initTexture() {
+func (b *Board) initTexture() {
 	b.texture = b.gl.CreateTexture()
 	b.gl.ActiveTexture(webgl.TEXTURE0)
 	b.gl.BindTexture(webgl.TEXTURE_2D, b.texture)
@@ -307,17 +307,17 @@ func (b *board) initTexture() {
 	util.SetInt(b.gl, b.pixelInspectorProgram, "t", 0)
 }
 
-func (b *board) setTextureData(data []byte) {
+func (b *Board) setTextureData(data []byte) {
 	b.gl.TexImage2DArray(webgl.TEXTURE_2D, 0, webgl.ALPHA, b.Width, b.Height, 0,
 		webgl.ALPHA, webgl.UNSIGNED_BYTE, data)
 }
 
-func (b *board) SetPixels(data []byte) {
+func (b *Board) SetPixels(data []byte) {
 	b.setTextureData(data)
 	b.draw()
 }
 
-func (b *board) initTexCoords() {
+func (b *Board) initTexCoords() {
 	b.texCoords = []float32{
 		0.0, 1.0,
 		0.0, 0.0,
@@ -332,7 +332,7 @@ func (b *board) initTexCoords() {
 	b.texCoordsBuff.BindData(b.gl, b.texCoords)
 }
 
-func (b *board) initPositions() {
+func (b *Board) initPositions() {
 	b.positions = []float32{
 		-1.0, +1.0,
 		-1.0, -1.0,
@@ -379,7 +379,7 @@ func (b *board) initPositions() {
 	b.pixelPosBuff.BindData(b.gl, b.pixelPos)
 }
 
-func (b *board) SetColors(background, foreground mgl.Vec4) {
+func (b *Board) SetColors(background, foreground mgl.Vec4) {
 	b.gl.UseProgram(b.program)
 	util.SetVec4(b.gl, b.program, "background", background)
 	util.SetVec4(b.gl, b.program, "foreground", foreground)
@@ -390,7 +390,7 @@ func (b *board) SetColors(background, foreground mgl.Vec4) {
 
 }
 
-func (b *board) draw() {
+func (b *Board) draw() {
 	// Draw the texture.
 	b.gl.Viewport(0.0, 0.0, b.Width, b.Height)
 
