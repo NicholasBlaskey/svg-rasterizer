@@ -19,11 +19,29 @@ type rasterizer struct {
 	board *board.Board
 }
 
+type Svg struct {
+	XMLName xml.Name
+	Width   string `xml:"width,attr"`
+	Height  string `xml:"height,attr"`
+	ViewBox string `xml:"viewBox,attr"`
+	Rects   []Rect `xml:"rect"`
+}
+
+type Rect struct {
+	X      float32 `xml:"x,attr"`
+	Y      float32 `xml:"y,attr"`
+	Fill   string  `xml:"fill,attr"`
+	Width  float32 `xml:"width,attr"`
+	Height float32 `xml:"height,attr"`
+}
+
+/*
 type Node struct {
 	XMLName xml.Name
 	Content []byte `xml:",innerxml"`
 	Nodes   []Node `xml:",any"`
 }
+*/
 
 func New(canvas js.Value, filePath string) (*rasterizer, error) {
 	fileString := getFile(filePath)
@@ -31,37 +49,37 @@ func New(canvas js.Value, filePath string) (*rasterizer, error) {
 	buf := bytes.NewBuffer([]byte(fileString))
 	dec := xml.NewDecoder(buf)
 
-	var n Node
-	err := dec.Decode(&n)
-	if err != nil {
-		panic(err)
+	var svg Svg
+	if err := dec.Decode(&svg); err != nil {
+		return nil, err
 	}
 
-	walk([]Node{n}, func(n Node) bool {
-		fmt.Println(n.XMLName.Local)
-		/*
-			if n.XMLName.Local == "p" {
-				fmt.Println(string(n.Content))
-			}
-		*/
-		return true
-	})
-
-	fmt.Println(filePath, fileString)
+	fmt.Println(svg.Rects[0])
 
 	/*
-		var xmlFile map[string]interface{}
-		err := xml.Unmarshal([]byte(fileString), &xmlFile)
+		var n Node
+		err := dec.Decode(&n)
 		if err != nil {
 			panic(err)
 		}
 
-		fmt.Println(xmlFile)
+			walk([]Node{n}, func(n Node) bool {
+				if n.XMLName.Local == "svg" {
+					handleSvgTag(n)
+				} else if n.XMLName.Local == "rect" {
+					handleRectTag(n)
+				}
+
+				return true
+			})
 	*/
+
+	//fmt.Println(filePath, fileString)
 
 	return &rasterizer{}, nil
 }
 
+/*
 func walk(nodes []Node, f func(Node) bool) {
 	for _, n := range nodes {
 		if f(n) {
@@ -69,6 +87,15 @@ func walk(nodes []Node, f func(Node) bool) {
 		}
 	}
 }
+
+func handleSvgTag(n Node) {
+	fmt.Println(string(n.XMLName.Space))
+}
+
+func handleRectTag(n Node) {
+	//
+}
+*/
 
 func getFile(filePath string) string {
 	loc := js.Global().Get("location")
@@ -122,21 +149,23 @@ func main() {
 		b.SetPixels(data)
 	*/
 
-	data := []byte{}
-	for i := 0; i < b.Width/10; i++ {
-		col1, col2 := byte(rand.Int31n(256)), byte(rand.Int31n(256))
+	/*
+		data := []byte{}
+		for i := 0; i < b.Width/10; i++ {
+			col1, col2 := byte(rand.Int31n(256)), byte(rand.Int31n(256))
 
-		for k := 0; k < 10; k++ {
+			for k := 0; k < 10; k++ {
 
-			for j := 0; j < b.Height/2; j++ {
-				data = append(data, col1)
-			}
-			for j := b.Height / 2; j < b.Height; j++ {
-				data = append(data, col2)
+				for j := 0; j < b.Height/2; j++ {
+					data = append(data, col1)
+				}
+				for j := b.Height / 2; j < b.Height; j++ {
+					data = append(data, col2)
+				}
 			}
 		}
-	}
-	b.SetPixels(data)
+		b.SetPixels(data)
+	*/
 
 	<-make(chan bool) // Prevent program from exiting
 }
