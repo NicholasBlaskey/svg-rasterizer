@@ -43,7 +43,13 @@ type Rect struct {
 
 func (s *Rect) rasterize(r *rasterizer) {
 	xCoord := int(s.X * float32(r.widthPixels))
-	yCoord := int(s.Y * float32(r.heightPixels))
+	yCoord := r.heightPixels - int(s.Y*float32(r.heightPixels))
+
+	if xCoord < 0 || xCoord > r.widthPixels ||
+		yCoord < 0 || yCoord > r.heightPixels {
+		return
+	}
+
 	r.pixels[xCoord+yCoord*r.widthPixels] = 255
 }
 
@@ -127,6 +133,9 @@ func main() {
 	if err != nil {
 		panic(err)
 	}
+
+	canvas.Set("height", 900)
+	canvas.Set("width", 900)
 
 	r.Draw()
 

@@ -389,7 +389,8 @@ func (b *Board) SetColors(background, foreground mgl.Vec4) {
 
 func (b *Board) draw() {
 	// Draw the texture.
-	b.gl.Viewport(0.0, 0.0, b.Width, b.Height)
+	w, h := b.canvas.Get("width").Int(), b.canvas.Get("height").Int()
+	b.gl.Viewport(0.0, 0.0, w, h)
 
 	b.gl.UseProgram(b.program)
 	b.positionsBuff.BindToAttrib(b.gl, b.program, "a_position")
@@ -404,7 +405,7 @@ func (b *Board) draw() {
 	}
 
 	// Draw the pixel inpector
-	b.gl.Viewport(b.Width/2, b.Height/2, b.Width/2, b.Height/2)
+	b.gl.Viewport(w/2, h/2, w/2, h/2)
 
 	// Draw black box around viewport to be used for pixel borders.
 	b.gl.Enable(webgl.SCISSOR_TEST)
