@@ -34,10 +34,8 @@ type Board struct {
 	offsets               []float32 // Amount to add to the texture coordinate to get to the pixel from the center.
 	offsetsBuff           *util.Buffer
 	//
-	texture       *webgl.Texture
-	program       *webgl.Program
-	colorsIndBuff *util.Buffer
-	colorsInd     []float32 // Color indicator 0 => background, 1 => foreground
+	texture *webgl.Texture
+	program *webgl.Program
 }
 
 func New(canvas js.Value) (*Board, error) {
@@ -59,7 +57,6 @@ func New(canvas js.Value) (*Board, error) {
 	}
 	b.initTexCoords()
 	b.initPositions()
-	//b.initColorInd()
 	b.initTexture()
 
 	b.initZoomListener()
@@ -67,9 +64,12 @@ func New(canvas js.Value) (*Board, error) {
 	b.initPixelInspector()
 	b.initPixelInspectorOffsets()
 
-	b.SetColors(mgl.Vec4{6 / 255.0, 35 / 255.0, 41 / 255.0, 1.0},
-		mgl.Vec4{140 / 255.0, 222 / 255.0, 148 / 255.0, 1.0})
+	/*
+		b.SetColors(mgl.Vec4{6 / 255.0, 35 / 255.0, 41 / 255.0, 1.0},
+			mgl.Vec4{140 / 255.0, 222 / 255.0, 148 / 255.0, 1.0})
+	*/
 	b.gl.ClearColor(0.3, 0.5, 0.3, 1.0)
+
 	b.draw()
 
 	return b, nil
@@ -230,11 +230,12 @@ func (b *Board) initShaders() error {
 			precision mediump float;
 			uniform sampler2D t;
 			varying vec2 texCoord;
-			uniform vec4 foreground;
-			uniform vec4 background;
+			//uniform vec4 foreground;
+			//uniform vec4 background;
 			void main() {
-				float alpha = texture2D(t, texCoord).a;
-				gl_FragColor = alpha * foreground + (1.0 - alpha) * background;
+				gl_FragColor = texture2D(t, texCoord);
+				//float alpha = texture2D(t, texCoord).a;
+				//gl_FragColor = alpha * foreground + (1.0 - alpha) * background;
 			}`
 
 	program, err := util.CreateProgram(b.gl, vertShader, fragShader)
@@ -257,8 +258,8 @@ func (b *Board) initShaders() error {
 			precision mediump float;
 			uniform sampler2D t;
 			uniform vec2 mousePos;
-			uniform vec4 foreground;
-			uniform vec4 background;
+			//uniform vec4 foreground;
+			//uniform vec4 background;
 			uniform vec2 translation;
 			uniform float zoomFactor;
 			varying vec2 offset;
@@ -270,8 +271,9 @@ func (b *Board) initShaders() error {
 				if (texCoord.x >= 0.0 && texCoord.x <= 1.0 &&
 					texCoord.y >= 0.0 && texCoord.y <= 1.0) {
 
-					float alpha = texture2D(t, texCoord).a;
-					gl_FragColor = alpha * foreground + (1.0 - alpha) * background;
+					gl_FragColor = texture2D(t, texCoord);
+					//float alpha = texture2D(t, texCoord).a;
+					//gl_FragColor = alpha * foreground + (1.0 - alpha) * background;
 				} else {
 					gl_FragColor = vec4(1.0, 1.0, 1.0, 1.0);
 				}
@@ -290,7 +292,7 @@ func (b *Board) initTexture() {
 	b.gl.ActiveTexture(webgl.TEXTURE0)
 	b.gl.BindTexture(webgl.TEXTURE_2D, b.texture)
 
-	data := make([]byte, b.Width*b.Height)
+	data := make([]byte, b.Width*b.Height*4)
 	b.setTextureData(data)
 
 	b.gl.TexParameteri(webgl.TEXTURE_2D, webgl.TEXTURE_WRAP_S, webgl.CLAMP_TO_EDGE)
@@ -305,8 +307,8 @@ func (b *Board) initTexture() {
 }
 
 func (b *Board) setTextureData(data []byte) {
-	b.gl.TexImage2DArray(webgl.TEXTURE_2D, 0, webgl.ALPHA, b.Width, b.Height, 0,
-		webgl.ALPHA, webgl.UNSIGNED_BYTE, data)
+	b.gl.TexImage2DArray(webgl.TEXTURE_2D, 0, webgl.RGBA, b.Width, b.Height, 0,
+		webgl.RGBA, webgl.UNSIGNED_BYTE, data)
 }
 
 func (b *Board) SetPixels(data []byte) {
@@ -376,6 +378,7 @@ func (b *Board) initPositions() {
 	b.pixelPosBuff.BindData(b.gl, b.pixelPos)
 }
 
+/*
 func (b *Board) SetColors(background, foreground mgl.Vec4) {
 	b.gl.UseProgram(b.program)
 	util.SetVec4(b.gl, b.program, "background", background)
@@ -386,6 +389,7 @@ func (b *Board) SetColors(background, foreground mgl.Vec4) {
 	util.SetVec4(b.gl, b.pixelInspectorProgram, "foreground", foreground)
 
 }
+*/
 
 func (b *Board) draw() {
 	// Draw the texture.

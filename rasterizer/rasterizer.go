@@ -41,6 +41,10 @@ type Rect struct {
 	Height float32 `xml:"height,attr"`
 }
 
+func parseColor(col string) (float32, float32, float32, float32) {
+
+}
+
 func (s *Rect) rasterize(r *rasterizer) {
 	xCoord := int(s.X * float32(r.widthPixels))
 	yCoord := r.heightPixels - int(s.Y*float32(r.heightPixels))
@@ -50,7 +54,11 @@ func (s *Rect) rasterize(r *rasterizer) {
 		return
 	}
 
-	r.pixels[xCoord+yCoord*r.widthPixels] = 255
+	r, g, b, a := parseColor(s.Fill)
+	r.pixels[(xCoord+yCoord*r.widthPixels)*4] = r
+	r.pixels[(xCoord+yCoord*r.widthPixels)*4+1] = g
+	r.pixels[(xCoord+yCoord*r.widthPixels)*4+2] = b
+	r.pixels[(xCoord+yCoord*r.widthPixels)*4+3] = a
 }
 
 /*
@@ -69,11 +77,11 @@ func New(canvas js.Value, filePath string) (*rasterizer, error) {
 
 	buf := bytes.NewBuffer([]byte(fileString))
 	dec := xml.NewDecoder(buf)
+
 	var svg Svg
 	if err := dec.Decode(&svg); err != nil {
 		return nil, err
 	}
-
 	r.svg = &svg
 
 	// TODO Calculate needed drawing info.
@@ -97,7 +105,11 @@ func New(canvas js.Value, filePath string) (*rasterizer, error) {
 }
 
 func (r *rasterizer) Draw() {
-	r.pixels = make([]byte, 1*r.widthPixels*r.heightPixels)
+	r.pixels = make([]byte, 4*r.widthPixels*r.heightPixels)
+
+	for i := 0; i < len(r.pixels); i++ {
+		r.pixels[i] = 255
+	}
 
 	for _, rect := range r.svg.Rects {
 		rect.rasterize(r)
