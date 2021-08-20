@@ -16,16 +16,13 @@ import (
 )
 
 type rasterizer struct {
-	board       *board.Board
-	svg         *Svg
-	drawingInfo drawInfo
-	pixels      []byte
-}
-
-// TODO improve this
-type drawInfo struct {
-	width  int
-	height int
+	board        *board.Board
+	svg          *Svg
+	pixels       []byte
+	widthPixels  int
+	heightPixels int
+	width        float32
+	height       float32
 }
 
 type Svg struct {
@@ -45,7 +42,9 @@ type Rect struct {
 }
 
 func (s *Rect) rasterize(r *rasterizer) {
-	r.pixels[0] = 255
+	xCoord := int(s.X * float32(r.widthPixels))
+	yCoord := int(s.Y * float32(r.heightPixels))
+	r.pixels[xCoord+yCoord*r.widthPixels] = 255
 }
 
 /*
@@ -72,19 +71,19 @@ func New(canvas js.Value, filePath string) (*rasterizer, error) {
 	r.svg = &svg
 
 	// TODO Calculate needed drawing info.
-	r.drawingInfo = drawInfo{
-		width:  600, // TODO Ensure multiple for byte alignment
-		height: 600,
-	}
+	r.widthPixels = 600 // TODO Ensure multiple for byte alignment
+	r.heightPixels = 600
+	r.width = 1.0
+	r.height = 1.0
 
 	// Create board.
-	canvas.Set("height", r.drawingInfo.width)
-	canvas.Set("width", r.drawingInfo.height)
+	canvas.Set("height", r.widthPixels)
+	canvas.Set("width", r.heightPixels)
 	b, err := board.New(canvas)
 	if err != nil {
 		panic(err)
 	}
-	b.EnablePixelInspector(true)
+	//b.EnablePixelInspector(true)
 
 	r.board = b
 
@@ -92,9 +91,11 @@ func New(canvas js.Value, filePath string) (*rasterizer, error) {
 }
 
 func (r *rasterizer) Draw() {
-	r.pixels = make([]byte, 1*r.drawingInfo.width*r.drawingInfo.height)
+	r.pixels = make([]byte, 1*r.widthPixels*r.heightPixels)
 
-	r.svg.Rects[0].rasterize(r)
+	for _, rect := range r.svg.Rects {
+		rect.rasterize(r)
+	}
 
 	r.board.SetPixels(r.pixels)
 }
