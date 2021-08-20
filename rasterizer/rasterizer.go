@@ -43,22 +43,18 @@ type Rect struct {
 }
 
 func parseColor(col string) (byte, byte, byte, byte) {
-
-	//panic(col[1:2])
-
 	r, _ := strconv.ParseInt(col[1:3], 16, 8)
 	g, _ := strconv.ParseInt(col[3:5], 16, 8)
 	b, _ := strconv.ParseInt(col[5:7], 16, 8)
 	a := 255
 
-	fmt.Println(col[1:3], col[3:5], col[5:7])
-
 	return byte(r), byte(g), byte(b), byte(a)
 }
 
 func (s *Rect) rasterize(r *rasterizer) {
-	xCoord := int(s.X * float32(r.widthPixels))
-	yCoord := r.heightPixels - int(s.Y*float32(r.heightPixels))
+	// TODO is this width and height divide right?
+	xCoord := int(s.X * float32(r.widthPixels) / r.width)
+	yCoord := r.heightPixels - int(s.Y*float32(r.heightPixels)/r.height)
 
 	if xCoord < 0 || xCoord > r.widthPixels ||
 		yCoord < 0 || yCoord > r.heightPixels {
@@ -96,10 +92,18 @@ func New(canvas js.Value, filePath string) (*rasterizer, error) {
 	r.svg = &svg
 
 	// TODO Calculate needed drawing info.
-	r.widthPixels = 600 // TODO Ensure multiple for byte alignment
-	r.heightPixels = 600
-	r.width = 1.0
-	r.height = 1.0
+	// This is probaly very wrong. However keep going and revise
+	// this to keep handling more test cases.
+	viewBox := strings.Split(svg.ViewBox, " ")
+	widthPixels, _ := strconv.ParseFloat(viewBox[2], 10)
+	heightPixels, _ := strconv.ParseFloat(viewBox[3], 10)
+	width, _ := strconv.Atoi(strings.Split(svg.Width, "px")[0])
+	height, _ := strconv.Atoi(strings.Split(svg.Height, "px")[0])
+
+	r.widthPixels = int(widthPixels)
+	r.heightPixels = int(heightPixels)
+	r.width = float32(width)
+	r.height = float32(height)
 
 	// Create board.
 	canvas.Set("height", r.widthPixels)
