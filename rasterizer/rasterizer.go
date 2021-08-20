@@ -16,7 +16,16 @@ import (
 )
 
 type rasterizer struct {
-	board *board.Board
+	board       *board.Board
+	svg         *Svg
+	drawingInfo drawInfo
+	pixels      []byte
+}
+
+// TODO improve this
+type drawInfo struct {
+	width  int
+	height int
 }
 
 type Svg struct {
@@ -35,6 +44,10 @@ type Rect struct {
 	Height float32 `xml:"height,attr"`
 }
 
+func (s *Rect) rasterize(r *rasterizer) {
+	r.pixels[0] = 255
+}
+
 /*
 type Node struct {
 	XMLName xml.Name
@@ -44,58 +57,47 @@ type Node struct {
 */
 
 func New(canvas js.Value, filePath string) (*rasterizer, error) {
+	r := &rasterizer{}
+
+	// Get xml file and parse it.
 	fileString := getFile(filePath)
 
 	buf := bytes.NewBuffer([]byte(fileString))
 	dec := xml.NewDecoder(buf)
-
 	var svg Svg
 	if err := dec.Decode(&svg); err != nil {
 		return nil, err
 	}
 
-	fmt.Println(svg.Rects[0])
+	r.svg = &svg
 
-	/*
-		var n Node
-		err := dec.Decode(&n)
-		if err != nil {
-			panic(err)
-		}
-
-			walk([]Node{n}, func(n Node) bool {
-				if n.XMLName.Local == "svg" {
-					handleSvgTag(n)
-				} else if n.XMLName.Local == "rect" {
-					handleRectTag(n)
-				}
-
-				return true
-			})
-	*/
-
-	//fmt.Println(filePath, fileString)
-
-	return &rasterizer{}, nil
-}
-
-/*
-func walk(nodes []Node, f func(Node) bool) {
-	for _, n := range nodes {
-		if f(n) {
-			walk(n.Nodes, f)
-		}
+	// TODO Calculate needed drawing info.
+	r.drawingInfo = drawInfo{
+		width:  600, // TODO Ensure multiple for byte alignment
+		height: 600,
 	}
+
+	// Create board.
+	canvas.Set("height", r.drawingInfo.width)
+	canvas.Set("width", r.drawingInfo.height)
+	b, err := board.New(canvas)
+	if err != nil {
+		panic(err)
+	}
+	b.EnablePixelInspector(true)
+
+	r.board = b
+
+	return r, nil
 }
 
-func handleSvgTag(n Node) {
-	fmt.Println(string(n.XMLName.Space))
-}
+func (r *rasterizer) Draw() {
+	r.pixels = make([]byte, 1*r.drawingInfo.width*r.drawingInfo.height)
 
-func handleRectTag(n Node) {
-	//
+	r.svg.Rects[0].rasterize(r)
+
+	r.board.SetPixels(r.pixels)
 }
-*/
 
 func getFile(filePath string) string {
 	loc := js.Global().Get("location")
@@ -120,15 +122,12 @@ func main() {
 	document := js.Global().Get("document")
 	canvas := document.Call("getElementById", "webgl")
 
-	New(canvas, "/svg/test1.svg")
-
-	canvas.Set("height", 800)
-	canvas.Set("width", 800)
-	b, err := board.New(canvas)
+	r, err := New(canvas, "/svg/test1.svg")
 	if err != nil {
 		panic(err)
 	}
-	b.EnablePixelInspector(true)
+
+	r.Draw()
 
 	fmt.Println("starting", rand.Int31n(256))
 
