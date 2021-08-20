@@ -5,6 +5,7 @@ import (
 	"io/ioutil"
 	"math/rand"
 	"net/http"
+	"strconv"
 	"strings"
 	"syscall/js"
 
@@ -41,8 +42,18 @@ type Rect struct {
 	Height float32 `xml:"height,attr"`
 }
 
-func parseColor(col string) (float32, float32, float32, float32) {
+func parseColor(col string) (byte, byte, byte, byte) {
 
+	//panic(col[1:2])
+
+	r, _ := strconv.ParseInt(col[1:3], 16, 8)
+	g, _ := strconv.ParseInt(col[3:5], 16, 8)
+	b, _ := strconv.ParseInt(col[5:7], 16, 8)
+	a := 255
+
+	fmt.Println(col[1:3], col[3:5], col[5:7])
+
+	return byte(r), byte(g), byte(b), byte(a)
 }
 
 func (s *Rect) rasterize(r *rasterizer) {
@@ -54,8 +65,8 @@ func (s *Rect) rasterize(r *rasterizer) {
 		return
 	}
 
-	r, g, b, a := parseColor(s.Fill)
-	r.pixels[(xCoord+yCoord*r.widthPixels)*4] = r
+	red, g, b, a := parseColor(s.Fill)
+	r.pixels[(xCoord+yCoord*r.widthPixels)*4] = red
 	r.pixels[(xCoord+yCoord*r.widthPixels)*4+1] = g
 	r.pixels[(xCoord+yCoord*r.widthPixels)*4+2] = b
 	r.pixels[(xCoord+yCoord*r.widthPixels)*4+3] = a
@@ -146,8 +157,10 @@ func main() {
 		panic(err)
 	}
 
-	canvas.Set("height", 900)
-	canvas.Set("width", 900)
+	/*
+		canvas.Set("height", 900)
+		canvas.Set("width", 900)
+	*/
 
 	r.Draw()
 
