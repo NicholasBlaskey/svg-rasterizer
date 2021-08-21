@@ -84,24 +84,20 @@ type Line struct {
 func (s *Line) rasterize(r *rasterizer) {
 	red, g, b, a := parseColor(s.Fill)
 
-	// Get slope and reject the line if the slope is wrong
 	slope := (s.Y2 - s.Y1) / (s.X2 - s.X1)
-	//if slope > 0.0 {
-	//return
-	//}
 
 	if slope < 0 && slope > -1.0 {
 		if s.X1 < s.X2 {
-			r.bresenhamNegative(s.X1, s.Y1, s.X2, slope, red, g, b, a, false)
+			r.bresenham(s.X1, s.Y1, s.X2, slope, red, g, b, a, false)
 		} else {
-			r.bresenhamNegative(s.X2, s.Y2, s.X1, slope, red, g, b, a, false)
+			r.bresenham(s.X2, s.Y2, s.X1, slope, red, g, b, a, false)
 		}
 		return
 	} else if slope < 0.0 {
 		if s.Y1 < s.Y2 {
-			r.bresenhamNegative(s.Y1, s.X1, s.Y2, 1.0/slope, red, g, b, a, true)
+			r.bresenham(s.Y1, s.X1, s.Y2, 1.0/slope, red, g, b, a, true)
 		} else {
-			r.bresenhamNegative(s.Y2, s.X2, s.Y1, 1.0/slope, red, g, b, a, true)
+			r.bresenham(s.Y2, s.X2, s.Y1, 1.0/slope, red, g, b, a, true)
 		}
 		return
 	}
@@ -110,21 +106,26 @@ func (s *Line) rasterize(r *rasterizer) {
 
 	if slope > 1.0 {
 		if s.Y1 < s.Y2 {
-			r.bresenhamPositive(s.Y1, s.X1, s.Y2, 1.0/slope, red, g, b, a, true)
+			r.bresenham(s.Y1, s.X1, s.Y2, 1.0/slope, red, g, b, a, true)
 		} else {
-			r.bresenhamPositive(s.Y2, s.X2, s.Y1, 1.0/slope, red, g, b, a, true)
+			r.bresenham(s.Y2, s.X2, s.Y1, 1.0/slope, red, g, b, a, true)
 		}
 		return
 	}
 
 	if s.X1 < s.X2 {
-		r.bresenhamPositive(s.X1, s.Y1, s.X2, slope, red, g, b, a, false)
+		r.bresenham(s.X1, s.Y1, s.X2, slope, red, g, b, a, false)
 	} else {
-		r.bresenhamPositive(s.X2, s.Y2, s.X1, slope, red, g, b, a, false)
+		r.bresenham(s.X2, s.Y2, s.X1, slope, red, g, b, a, false)
 	}
 }
 
-func (r *rasterizer) bresenhamPositive(x1, y1, x2, slope float32, red, g, b, a byte, flipped bool) {
+func (r *rasterizer) bresenham(x1, y1, x2, slope float32, red, g, b, a byte, flipped bool) {
+	direction := float32(1.0)
+	if slope < 0 {
+		direction = -1.0
+	}
+
 	epsilon := float32(0.0)
 	y := y1
 	for x := x1; x < x2; x++ {
@@ -133,29 +134,12 @@ func (r *rasterizer) bresenhamPositive(x1, y1, x2, slope float32, red, g, b, a b
 		} else {
 			r.drawPoint(x, y, red, g, b, a)
 		}
-		if epsilon+slope < 0.5 {
-			epsilon += slope
-		} else {
-			y += 1
-			epsilon += slope - 1
-		}
-	}
-}
 
-func (r *rasterizer) bresenhamNegative(x1, y1, x2, slope float32, red, g, b, a byte, flipped bool) {
-	epsilon := float32(0.0)
-	y := y1
-	for x := x1; x < x2; x++ {
-		if flipped {
-			r.drawPoint(y, x, red, g, b, a)
-		} else {
-			r.drawPoint(x, y, red, g, b, a)
-		}
-		if epsilon+slope > -0.5 {
+		if (slope >= 0 && epsilon+slope < 0.5) || (slope < 0 && epsilon+slope > -0.5) {
 			epsilon += slope
 		} else {
-			y -= 1
-			epsilon += slope + 1
+			y += direction
+			epsilon += slope - direction
 		}
 	}
 }
