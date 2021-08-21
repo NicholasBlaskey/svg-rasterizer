@@ -62,8 +62,8 @@ func (r *rasterizer) drawPoint(x, y float32, red, g, b, a byte) {
 	xCoord := int(x * float32(r.widthPixels) / r.width)
 	yCoord := r.heightPixels - int(y*float32(r.heightPixels)/r.height)
 
-	if xCoord < 0 || xCoord > r.widthPixels ||
-		yCoord < 0 || yCoord > r.heightPixels {
+	if xCoord < 0 || xCoord >= r.widthPixels ||
+		yCoord < 0 || yCoord >= r.heightPixels {
 		return
 	}
 
@@ -86,15 +86,38 @@ func (s *Line) rasterize(r *rasterizer) {
 
 	// Get slope and reject the line if the slope is wrong
 	slope := (s.Y2 - s.Y1) / (s.X2 - s.X1)
-	if slope < 0.0 || slope >= 1.0 {
+	if slope < 0.0 {
 		return
 	}
 
-	//float version
+	fmt.Printf("%+v\n", s)
+
+	if slope > 1.0 {
+		if s.Y1 < s.Y2 {
+			r.bresenhamPositive(s.Y1, s.X1, s.Y2, slope, red, g, b, a, true)
+		} //else {
+		//r.bresenhamPositive(s.Y2, s.X2, s.Y1, slope, red, g, b, a, true)
+		//}
+		return
+	}
+
+	if s.X1 < s.X2 {
+		r.bresenhamPositive(s.X1, s.Y1, s.X2, slope, red, g, b, a, false)
+	} else {
+		r.bresenhamPositive(s.X2, s.Y2, s.X1, slope, red, g, b, a, false)
+	}
+}
+
+func (r *rasterizer) bresenhamPositive(x1, y1, x2, slope float32, red, g, b, a byte, flipped bool) {
 	epsilon := float32(0.0)
-	y := s.Y1
-	for x := s.X1; x < s.X2; x++ {
-		r.drawPoint(x, y, red, g, b, a)
+	y := y1
+	for x := x1; x < x2; x++ {
+		//fmt.Println(x, y)
+		if flipped {
+			r.drawPoint(y, x, red, g, b, a)
+		} else {
+			r.drawPoint(x, y, red, g, b, a)
+		}
 		if epsilon+slope < 0.5 {
 			epsilon += slope
 		} else {
@@ -102,24 +125,6 @@ func (s *Line) rasterize(r *rasterizer) {
 			epsilon += slope - 1
 		}
 	}
-
-	// Integer version
-	/*
-		epsilon := 0
-		dx := int(s.X2 - s.X1)
-		dy := int(s.Y2 - s.Y1)
-		y := int(s.Y1)
-		for x := int(s.X1); x < int(s.X2); x++ {
-			r.drawPoint(float32(x), float32(y), red, g, b, a)
-
-			if 2*(epsilon+dx) < dx {
-				epsilon += dy
-			} else {
-				y += 1
-				epsilon += dy - dx
-			}
-		}
-	*/
 }
 
 /*
