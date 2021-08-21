@@ -16,6 +16,15 @@ import (
 	"github.com/nicholasblaskey/svg-rasterizer/board"
 )
 
+func parseColor(col string) (byte, byte, byte, byte) {
+	r, _ := strconv.ParseInt(col[1:3], 16, 8)
+	g, _ := strconv.ParseInt(col[3:5], 16, 8)
+	b, _ := strconv.ParseInt(col[5:7], 16, 8)
+	a := 255
+
+	return byte(r), byte(g), byte(b), byte(a)
+}
+
 type rasterizer struct {
 	board        *board.Board
 	svg          *Svg
@@ -32,6 +41,7 @@ type Svg struct {
 	Height  string `xml:"height,attr"`
 	ViewBox string `xml:"viewBox,attr"`
 	Rects   []Rect `xml:"rect"`
+	Lines   []Line `xml:"line"`
 }
 
 type Rect struct {
@@ -42,30 +52,74 @@ type Rect struct {
 	Height float32 `xml:"height,attr"`
 }
 
-func parseColor(col string) (byte, byte, byte, byte) {
-	r, _ := strconv.ParseInt(col[1:3], 16, 8)
-	g, _ := strconv.ParseInt(col[3:5], 16, 8)
-	b, _ := strconv.ParseInt(col[5:7], 16, 8)
-	a := 255
-
-	return byte(r), byte(g), byte(b), byte(a)
+func (s *Rect) rasterize(r *rasterizer) {
+	red, g, b, a := parseColor(s.Fill)
+	r.drawPoint(s.X, s.Y, red, g, b, a)
 }
 
-func (s *Rect) rasterize(r *rasterizer) {
+func (r *rasterizer) drawPoint(x, y float32, red, g, b, a byte) {
 	// TODO is this width and height divide right?
-	xCoord := int(s.X * float32(r.widthPixels) / r.width)
-	yCoord := r.heightPixels - int(s.Y*float32(r.heightPixels)/r.height)
+	xCoord := int(x * float32(r.widthPixels) / r.width)
+	yCoord := r.heightPixels - int(y*float32(r.heightPixels)/r.height)
 
 	if xCoord < 0 || xCoord > r.widthPixels ||
 		yCoord < 0 || yCoord > r.heightPixels {
 		return
 	}
 
-	red, g, b, a := parseColor(s.Fill)
 	r.pixels[(xCoord+yCoord*r.widthPixels)*4] = red
 	r.pixels[(xCoord+yCoord*r.widthPixels)*4+1] = g
 	r.pixels[(xCoord+yCoord*r.widthPixels)*4+2] = b
 	r.pixels[(xCoord+yCoord*r.widthPixels)*4+3] = a
+}
+
+type Line struct {
+	X1   float32 `xml:"x1,attr"`
+	Y1   float32 `xml:"y1,attr"`
+	X2   float32 `xml:"x2,attr"`
+	Y2   float32 `xml:"y2,attr"`
+	Fill string  `xml:"stroke,attr"`
+}
+
+func (s *Line) rasterize(r *rasterizer) {
+	red, g, b, a := parseColor(s.Fill)
+
+	// Get slope and reject the line if the slope is wrong
+	slope := (s.Y2 - s.Y1) / (s.X2 - s.X1)
+	if slope < 0.0 || slope >= 1.0 {
+		return
+	}
+
+	//float version
+	epsilon := float32(0.0)
+	y := s.Y1
+	for x := s.X1; x < s.X2; x++ {
+		r.drawPoint(x, y, red, g, b, a)
+		if epsilon+slope < 0.5 {
+			epsilon += slope
+		} else {
+			y += 1
+			epsilon += slope - 1
+		}
+	}
+
+	// Integer version
+	/*
+		epsilon := 0
+		dx := int(s.X2 - s.X1)
+		dy := int(s.Y2 - s.Y1)
+		y := int(s.Y1)
+		for x := int(s.X1); x < int(s.X2); x++ {
+			r.drawPoint(float32(x), float32(y), red, g, b, a)
+
+			if 2*(epsilon+dx) < dx {
+				epsilon += dy
+			} else {
+				y += 1
+				epsilon += dy - dx
+			}
+		}
+	*/
 }
 
 /*
@@ -95,15 +149,18 @@ func New(canvas js.Value, filePath string) (*rasterizer, error) {
 	// This is probaly very wrong. However keep going and revise
 	// this to keep handling more test cases.
 	viewBox := strings.Split(svg.ViewBox, " ")
-	widthPixels, _ := strconv.ParseFloat(viewBox[2], 10)
-	heightPixels, _ := strconv.ParseFloat(viewBox[3], 10)
-	width, _ := strconv.Atoi(strings.Split(svg.Width, "px")[0])
-	height, _ := strconv.Atoi(strings.Split(svg.Height, "px")[0])
+	widthPixels, _ := strconv.ParseFloat(viewBox[2], 64)
+	heightPixels, _ := strconv.ParseFloat(viewBox[3], 64)
+
+	width, _ := strconv.ParseFloat(strings.Split(svg.Width, "px")[0], 64)
+	height, _ := strconv.ParseFloat(strings.Split(svg.Height, "px")[0], 64)
 
 	r.widthPixels = int(widthPixels)
 	r.heightPixels = int(heightPixels)
 	r.width = float32(width)
 	r.height = float32(height)
+
+	fmt.Println("FMT", widthPixels, heightPixels, width, height)
 
 	// Create board.
 	canvas.Set("height", r.widthPixels)
@@ -128,6 +185,9 @@ func (r *rasterizer) Draw() {
 
 	for _, rect := range r.svg.Rects {
 		rect.rasterize(r)
+	}
+	for _, line := range r.svg.Lines {
+		line.rasterize(r)
 	}
 
 	r.board.SetPixels(r.pixels)
@@ -156,7 +216,8 @@ func main() {
 	document := js.Global().Get("document")
 	canvas := document.Call("getElementById", "webgl")
 
-	r, err := New(canvas, "/svg/test1.svg")
+	//r, err := New(canvas, "/svg/test1.svg")
+	r, err := New(canvas, "/svg/test2.svg")
 	if err != nil {
 		panic(err)
 	}
