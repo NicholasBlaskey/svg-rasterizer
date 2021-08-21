@@ -37,12 +37,13 @@ type rasterizer struct {
 }
 
 type Svg struct {
-	XMLName xml.Name
-	Width   string `xml:"width,attr"`
-	Height  string `xml:"height,attr"`
-	ViewBox string `xml:"viewBox,attr"`
-	Rects   []Rect `xml:"rect"`
-	Lines   []Line `xml:"line"`
+	XMLName  xml.Name
+	Width    string    `xml:"width,attr"`
+	Height   string    `xml:"height,attr"`
+	ViewBox  string    `xml:"viewBox,attr"`
+	Rects    []Rect    `xml:"rect"`
+	Lines    []Line    `xml:"line"`
+	Polygons []Polygon `xml:"polygon"`
 }
 
 type Rect struct {
@@ -129,6 +130,48 @@ func (r *rasterizer) bresenham(x1, y1, x2, slope float32, red, g, b, a byte, fli
 	}
 }
 
+type Polygon struct {
+	Fill   string `xml:"fill,attr"`
+	Points string `xml:"points,attr"`
+}
+
+type Triangle struct {
+	x1 float32
+	y1 float32
+	x2 float32
+	y2 float32
+	x3 float32
+	y3 float32
+}
+
+func pointsToTriangles(in string) []Triangle {
+	// TODO implmenet an algorithm to convert polygons into triangles
+	// https://stackoverflow.com/questions/7316000/convert-polygon-to-triangles
+	points := strings.Split(strings.Trim(in, " "), " ")
+
+	pointsFloat := []float32{}
+	for _, p := range points {
+		xy := strings.Split(p, ",")
+		x, _ := strconv.ParseFloat(xy[0], 32)
+		y, _ := strconv.ParseFloat(xy[1], 32)
+		pointsFloat = append(pointsFloat, float32(x), float32(y))
+	}
+
+	return []Triangle{Triangle{
+		pointsFloat[0],
+		pointsFloat[1],
+		pointsFloat[2],
+		pointsFloat[3],
+		pointsFloat[4],
+		pointsFloat[5],
+	}}
+}
+
+func (s *Polygon) rasterize(r *rasterizer) {
+	triangles := pointsToTriangles(s.Points)
+	fmt.Println(triangles)
+}
+
 /*
 type Node struct {
 	XMLName xml.Name
@@ -167,7 +210,7 @@ func New(canvas js.Value, filePath string) (*rasterizer, error) {
 	r.width = float32(width)
 	r.height = float32(height)
 
-	fmt.Println("FMT", widthPixels, heightPixels, width, height)
+	//fmt.Println("FMT", widthPixels, heightPixels, width, height)
 
 	// Create board.
 	canvas.Set("height", r.widthPixels)
@@ -195,6 +238,9 @@ func (r *rasterizer) Draw() {
 	}
 	for _, line := range r.svg.Lines {
 		line.rasterize(r)
+	}
+	for _, polygon := range r.svg.Polygons {
+		polygon.rasterize(r)
 	}
 
 	r.board.SetPixels(r.pixels)
@@ -224,7 +270,8 @@ func main() {
 	canvas := document.Call("getElementById", "webgl")
 
 	//r, err := New(canvas, "/svg/test1.svg")
-	r, err := New(canvas, "/svg/test2.svg")
+	//r, err := New(canvas, "/svg/test2.svg")
+	r, err := New(canvas, "/svg/test4.svg")
 	if err != nil {
 		panic(err)
 	}
