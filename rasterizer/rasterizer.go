@@ -85,24 +85,27 @@ type Line struct {
 
 func (s *Line) rasterize(r *rasterizer) {
 	red, g, b, a := parseColor(s.Fill)
+	r.drawLine(s.X1, s.Y1, s.X2, s.Y2, red, g, b, a)
+}
 
-	slope := (s.Y2 - s.Y1) / (s.X2 - s.X1)
+func (r *rasterizer) drawLine(x1, y1, x2, y2 float32, red, g, b, a byte) {
+	slope := (y2 - y1) / (x2 - x1)
 
 	// Slope greater than one case
 	if math.Abs(float64(slope)) > 1.0 {
-		if s.Y1 < s.Y2 {
-			r.bresenham(s.Y1, s.X1, s.Y2, 1.0/slope, red, g, b, a, true)
+		if y1 < y2 {
+			r.bresenham(y1, x1, y2, 1.0/slope, red, g, b, a, true)
 		} else { // Flip and y1 and y2
-			r.bresenham(s.Y2, s.X2, s.Y1, 1.0/slope, red, g, b, a, true)
+			r.bresenham(y2, x2, y1, 1.0/slope, red, g, b, a, true)
 		}
 		return
 	}
 
 	// Slope less than one case
-	if s.X1 < s.X2 {
-		r.bresenham(s.X1, s.Y1, s.X2, slope, red, g, b, a, false)
+	if x1 < x2 {
+		r.bresenham(x1, y1, x2, slope, red, g, b, a, false)
 	} else { // Flip and x1 and x2
-		r.bresenham(s.X2, s.Y2, s.X1, slope, red, g, b, a, false)
+		r.bresenham(x2, y2, x1, slope, red, g, b, a, false)
 	}
 }
 
@@ -136,12 +139,12 @@ type Polygon struct {
 }
 
 type Triangle struct {
-	x1 float32
-	y1 float32
-	x2 float32
-	y2 float32
-	x3 float32
-	y3 float32
+	X1 float32
+	Y1 float32
+	X2 float32
+	Y2 float32
+	X3 float32
+	Y3 float32
 }
 
 func pointsToTriangles(in string) []Triangle {
@@ -169,7 +172,15 @@ func pointsToTriangles(in string) []Triangle {
 
 func (s *Polygon) rasterize(r *rasterizer) {
 	triangles := pointsToTriangles(s.Points)
-	fmt.Println(triangles)
+
+	// TODO for loop these triangles when we start doing filling and polygons
+	t := triangles[0]
+
+	red, g, b, a := parseColor(s.Fill)
+	r.drawLine(t.X1, t.Y1, t.X2, t.Y2, red, g, b, a)
+	r.drawLine(t.X2, t.Y2, t.X3, t.Y3, red, g, b, a)
+	r.drawLine(t.X3, t.Y3, t.X1, t.Y1, red, g, b, a)
+
 }
 
 /*
