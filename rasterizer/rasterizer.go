@@ -3,6 +3,7 @@ package main
 import (
 	"bytes"
 	"io/ioutil"
+	"math"
 	"math/rand"
 	"net/http"
 	"strconv"
@@ -86,36 +87,20 @@ func (s *Line) rasterize(r *rasterizer) {
 
 	slope := (s.Y2 - s.Y1) / (s.X2 - s.X1)
 
-	if slope < 0 && slope > -1.0 {
-		if s.X1 < s.X2 {
-			r.bresenham(s.X1, s.Y1, s.X2, slope, red, g, b, a, false)
-		} else {
-			r.bresenham(s.X2, s.Y2, s.X1, slope, red, g, b, a, false)
-		}
-		return
-	} else if slope < 0.0 {
+	// Slope greater than one case
+	if math.Abs(float64(slope)) > 1.0 {
 		if s.Y1 < s.Y2 {
 			r.bresenham(s.Y1, s.X1, s.Y2, 1.0/slope, red, g, b, a, true)
-		} else {
+		} else { // Flip and y1 and y2
 			r.bresenham(s.Y2, s.X2, s.Y1, 1.0/slope, red, g, b, a, true)
 		}
 		return
 	}
 
-	//fmt.Printf("%+v slope=%f\n", s, slope)
-
-	if slope > 1.0 {
-		if s.Y1 < s.Y2 {
-			r.bresenham(s.Y1, s.X1, s.Y2, 1.0/slope, red, g, b, a, true)
-		} else {
-			r.bresenham(s.Y2, s.X2, s.Y1, 1.0/slope, red, g, b, a, true)
-		}
-		return
-	}
-
+	// Slope less than one case
 	if s.X1 < s.X2 {
 		r.bresenham(s.X1, s.Y1, s.X2, slope, red, g, b, a, false)
-	} else {
+	} else { // Flip and x1 and x2
 		r.bresenham(s.X2, s.Y2, s.X1, slope, red, g, b, a, false)
 	}
 }
