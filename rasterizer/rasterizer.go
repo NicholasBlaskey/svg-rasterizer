@@ -17,6 +17,18 @@ import (
 	"github.com/nicholasblaskey/svg-rasterizer/board"
 )
 
+func maxOfThree(x, y, z float32) float32 {
+	return float32(math.Max(float64(x), math.Max(float64(y), float64(z))))
+}
+
+func minOfThree(x, y, z float32) float32 {
+	return float32(math.Min(float64(x), math.Min(float64(y), float64(z))))
+}
+
+func crossProduct(x1, y1, x2, y2 float32) float32 {
+	return x1*y2 - y1*x2
+}
+
 func parseColor(col string) (byte, byte, byte, byte) {
 	r, _ := strconv.ParseInt(col[1:3], 16, 9)
 	g, _ := strconv.ParseInt(col[3:5], 16, 9)
@@ -183,19 +195,60 @@ func pointsToTriangles(in string) []Triangle {
 }
 
 func (s *Polygon) rasterize(r *rasterizer) {
+	//s.flatTriangleApproach(r)
+	s.boundingBoxApproach(r)
+}
+
+func (s *Polygon) boundingBoxApproach(r *rasterizer) {
 	triangles := pointsToTriangles(s.Points)
 
 	// TODO for loop these triangles when we start doing filling and polygons
 	t := triangles[0]
+	red, g, b, a := parseColor(s.Fill)
 
-	if t.Y2 != t.Y3 { // Not flat bottom
-		return
+	minX := minOfThree(t.X1, t.X2, t.X3)
+	maxX := maxOfThree(t.X1, t.X2, t.X3)
+	minY := minOfThree(t.Y1, t.Y2, t.Y3)
+	maxY := maxOfThree(t.Y1, t.Y2, t.Y3)
+
+	vsX1, vsY1 := t.X2-t.X1, t.Y2-t.Y1
+	vsX2, vsY2 := t.X3-t.X1, t.Y3-t.Y1
+	for x := minX; x <= maxX; x++ {
+		for y := minY; y <= maxY; y++ {
+			qx, qy := x-t.X1, y-t.Y1
+			s := crossProduct(qx, qy, vsX2, vsY2) / crossProduct(vsX1, vsY1, vsX2, vsY2)
+			t := crossProduct(vsX1, vsY1, qx, qy) / crossProduct(vsX1, vsY1, vsX2, vsY2)
+
+			if s >= 0 && t >= 0 && s+t <= 1 {
+				r.drawPoint(x, y, red, g, b, a)
+			}
+		}
 	}
 
+}
+
+func (s *Polygon) flatTriangleApproach(r *rasterizer) {
+	triangles := pointsToTriangles(s.Points)
+
+	// TODO for loop these triangles when we start doing filling and polygons
+	t := triangles[0]
 	red, g, b, a := parseColor(s.Fill)
 
 	// http://www.sunshine2k.de/coding/java/TriangleRasterization/TriangleRasterization.html
-	r.drawFlatBottomTriangle(t.X1, t.Y1, t.X2, t.Y2, t.X3, t.Y3, red, g, b, a)
+	if t.Y2 == t.Y3 { // Only flat bottom triangle
+		r.drawFlatBottomTriangle(t.X1, t.Y1, t.X2, t.Y2, t.X3, t.Y3, red, g, b, a)
+		return
+	} else if t.Y1 == t.Y2 { // Only flat top triangle
+		r.drawFlatTopTriangle(t.X1, t.Y1, t.X2, t.Y2, t.X3, t.Y3, red, g, b, a)
+		return
+	}
+
+	// Split triangle into a topflat and bottom flat triangle
+	x4 := t.X1 + (t.Y2-t.Y1)/(t.Y3-t.Y1)*(t.X3-t.X1)
+	y4 := t.Y2
+
+	r.drawFlatBottomTriangle(t.X1, t.Y1, t.X2, t.Y2, x4, y4, red, g, b, a)
+	r.drawFlatTopTriangle(t.X2, t.Y2, x4, y4, t.X3, t.Y3, red, g, b, a)
 
 	/*
 		r.drawLine(t.X1, t.Y1, t.X2, t.Y2, red, g, b, a)
@@ -214,7 +267,20 @@ func (r *rasterizer) drawFlatBottomTriangle(x1, y1, x2, y2, x3, y3 float32, red,
 		curX1 += invSlope1
 		curX2 += invSlope2
 	}
+}
 
+func (r *rasterizer) drawFlatTopTriangle(x1, y1, x2, y2, x3, y3 float32, red, g, b, a byte) {
+	invSlope1 := (x3 - x1) / (y3 - y1)
+	invSlope2 := (x3 - x2) / (y3 - y2)
+	curX1, curX2 := x3, x3
+
+	for scanLineY := y3; scanLineY > y1; scanLineY-- {
+		fmt.Println(curX1, scanLineY, curX2)
+		r.drawLine(curX1, scanLineY, curX2, scanLineY, red, g, b, a)
+
+		curX1 -= invSlope1
+		curX2 -= invSlope2
+	}
 }
 
 /*
