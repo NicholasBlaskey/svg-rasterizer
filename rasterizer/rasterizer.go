@@ -18,9 +18,9 @@ import (
 )
 
 func parseColor(col string) (byte, byte, byte, byte) {
-	r, _ := strconv.ParseInt(col[1:3], 16, 8)
-	g, _ := strconv.ParseInt(col[3:5], 16, 8)
-	b, _ := strconv.ParseInt(col[5:7], 16, 8)
+	r, _ := strconv.ParseInt(col[1:3], 16, 9)
+	g, _ := strconv.ParseInt(col[3:5], 16, 9)
+	b, _ := strconv.ParseInt(col[5:7], 16, 9)
 	a := 255
 
 	return byte(r), byte(g), byte(b), byte(a)
@@ -160,14 +160,26 @@ func pointsToTriangles(in string) []Triangle {
 		pointsFloat = append(pointsFloat, float32(x), float32(y))
 	}
 
-	return []Triangle{Triangle{
+	t := Triangle{
 		pointsFloat[0],
 		pointsFloat[1],
 		pointsFloat[2],
 		pointsFloat[3],
 		pointsFloat[4],
 		pointsFloat[5],
-	}}
+	}
+	// Sort triangle such that y1 < y2 < y3
+	if t.Y1 > t.Y3 {
+		t.X1, t.Y1, t.X3, t.Y3 = t.X3, t.Y3, t.X1, t.Y1
+	}
+	if t.Y1 > t.Y2 {
+		t.X1, t.Y1, t.X2, t.Y2 = t.X2, t.Y2, t.X1, t.Y1
+	}
+	if t.Y2 > t.Y3 {
+		t.X2, t.Y2, t.X3, t.Y3 = t.X3, t.Y3, t.X2, t.Y2
+	}
+
+	return []Triangle{t}
 }
 
 func (s *Polygon) rasterize(r *rasterizer) {
@@ -176,10 +188,32 @@ func (s *Polygon) rasterize(r *rasterizer) {
 	// TODO for loop these triangles when we start doing filling and polygons
 	t := triangles[0]
 
+	if t.Y2 != t.Y3 { // Not flat bottom
+		return
+	}
+
 	red, g, b, a := parseColor(s.Fill)
-	r.drawLine(t.X1, t.Y1, t.X2, t.Y2, red, g, b, a)
-	r.drawLine(t.X2, t.Y2, t.X3, t.Y3, red, g, b, a)
-	r.drawLine(t.X3, t.Y3, t.X1, t.Y1, red, g, b, a)
+
+	// http://www.sunshine2k.de/coding/java/TriangleRasterization/TriangleRasterization.html
+	r.drawFlatBottomTriangle(t.X1, t.Y1, t.X2, t.Y2, t.X3, t.Y3, red, g, b, a)
+
+	/*
+		r.drawLine(t.X1, t.Y1, t.X2, t.Y2, red, g, b, a)
+		r.drawLine(t.X2, t.Y2, t.X3, t.Y3, red, g, b, a)
+		r.drawLine(t.X3, t.Y3, t.X1, t.Y1, red, g, b, a)
+	*/
+}
+
+func (r *rasterizer) drawFlatBottomTriangle(x1, y1, x2, y2, x3, y3 float32, red, g, b, a byte) {
+	invSlope1 := (x2 - x1) / (y2 - y1)
+	invSlope2 := (x3 - x1) / (y3 - y1)
+	curX1, curX2 := x1, x1
+	for scanLineY := y1; scanLineY <= y2; scanLineY++ {
+		r.drawLine(curX1, scanLineY, curX2, scanLineY, red, g, b, a)
+
+		curX1 += invSlope1
+		curX2 += invSlope2
+	}
 
 }
 
