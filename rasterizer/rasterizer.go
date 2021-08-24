@@ -31,6 +31,8 @@ func triangulate(points []float32) []*Triangle {
 		contour = append(contour, vec2{points[i], points[i+1]})
 	}
 
+	fmt.Println(contour)
+
 	// Initialize list of vertices in the polygon
 	n := len(contour)
 	if n < 3 {
@@ -38,7 +40,7 @@ func triangulate(points []float32) []*Triangle {
 	}
 
 	// We want a counter-clockwise polygon in V
-	V := []int{}
+	V := make([]int, n)
 	if 0.0 < area(contour) {
 		for v := 0; v < n; v++ {
 			V[v] = v
@@ -57,7 +59,7 @@ func triangulate(points []float32) []*Triangle {
 	for m, v := 0, nv-1; nv > 2; {
 		// If we loop it is likely a non-simple polygon
 		if 0 >= count {
-			return nil // Error, probably a bad polygon!
+			return triangles // Error, probably a bad polygon!
 		}
 		count -= 1
 
@@ -75,7 +77,11 @@ func triangulate(points []float32) []*Triangle {
 			w = 0
 		}
 
+		fmt.Println("u, v, w", u, v, w)
+
 		if snip(contour, u, v, w, nv, V) {
+			fmt.Println("Snip passed")
+
 			var a, b, c, s, t int
 			a, b, c = V[u], V[v], V[w]
 
@@ -108,11 +114,14 @@ func area(contour []vec2) float32 {
 
 	p, q := n-1, 0
 	for q < n {
+		fmt.Println(p, q)
 		a += contour[p].x*contour[q].y - contour[q].x*contour[p].y
 
-		q += 1
 		p = q
+		q += 1
 	}
+
+	fmt.Println("AREA", a)
 	return a * 0.5
 }
 
@@ -128,7 +137,12 @@ func snip(contour []vec2, u, v, w, n int, V []int) bool {
 	Cx := contour[V[w]].x
 	Cy := contour[V[w]].y
 
+	fmt.Println(Ax, Ay, Bx, By, Cx, Cy, V)
+
 	if EPSILON > (((Bx - Ax) * (Cy - Ay)) - ((By - Ay) * (Cx - Ax))) {
+		fmt.Println("EPSILONING out", (((Bx - Ax) * (Cy - Ay)) - ((By - Ay) * (Cx - Ax))))
+		fmt.Println(Ax, Ay, Bx, By, Cx, Cy)
+
 		return false
 	}
 
@@ -318,6 +332,7 @@ func pointsToTriangles(in string) []*Triangle {
 	}
 
 	triangles := triangulate(pointsFloat)
+	fmt.Println("LEN OF TRIANGLES", len(triangles), pointsFloat)
 	for _, t := range triangles {
 
 		//}
