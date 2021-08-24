@@ -31,8 +31,6 @@ func triangulate(points []float32) []*Triangle {
 		contour = append(contour, vec2{points[i], points[i+1]})
 	}
 
-	fmt.Println(contour)
-
 	// Initialize list of vertices in the polygon
 	n := len(contour)
 	if n < 3 {
@@ -77,11 +75,9 @@ func triangulate(points []float32) []*Triangle {
 			w = 0
 		}
 
-		fmt.Println("u, v, w", u, v, w)
+		fmt.Println("u,v,w", u, v, w)
 
 		if snip(contour, u, v, w, nv, V) {
-			fmt.Println("Snip passed")
-
 			var a, b, c, s, t int
 			a, b, c = V[u], V[v], V[w]
 
@@ -96,14 +92,17 @@ func triangulate(points []float32) []*Triangle {
 			// Remove v from remaining polygon
 			s, t = v, v+1
 			for t < nv {
+				fmt.Println("s, t", s, t)
+
 				V[s] = V[t]
 				s += 1
 				t += 1
-				nv -= 1
 			}
+			nv -= 1
 
 			count = 2 * nv // reset error detection counter
 		}
+		fmt.Println("nv", nv)
 	}
 	return triangles
 }
@@ -114,14 +113,12 @@ func area(contour []vec2) float32 {
 
 	p, q := n-1, 0
 	for q < n {
-		fmt.Println(p, q)
 		a += contour[p].x*contour[q].y - contour[q].x*contour[p].y
 
 		p = q
 		q += 1
 	}
 
-	fmt.Println("AREA", a)
 	return a * 0.5
 }
 
@@ -137,12 +134,7 @@ func snip(contour []vec2, u, v, w, n int, V []int) bool {
 	Cx := contour[V[w]].x
 	Cy := contour[V[w]].y
 
-	fmt.Println(Ax, Ay, Bx, By, Cx, Cy, V)
-
 	if EPSILON > (((Bx - Ax) * (Cy - Ay)) - ((By - Ay) * (Cx - Ax))) {
-		fmt.Println("EPSILONING out", (((Bx - Ax) * (Cy - Ay)) - ((By - Ay) * (Cx - Ax))))
-		fmt.Println(Ax, Ay, Bx, By, Cx, Cy)
-
 		return false
 	}
 
@@ -370,28 +362,29 @@ func (s *Polygon) boundingBoxApproach(r *rasterizer) {
 	triangles := pointsToTriangles(s.Points)
 
 	// TODO for loop these triangles when we start doing filling and polygons
-	t := triangles[0]
-	red, g, b, a := parseColor(s.Fill)
+	//t := triangles[0]
+	for _, t := range triangles {
+		red, g, b, a := parseColor(s.Fill)
 
-	minX := minOfThree(t.X1, t.X2, t.X3)
-	maxX := maxOfThree(t.X1, t.X2, t.X3)
-	minY := minOfThree(t.Y1, t.Y2, t.Y3)
-	maxY := maxOfThree(t.Y1, t.Y2, t.Y3)
+		minX := minOfThree(t.X1, t.X2, t.X3)
+		maxX := maxOfThree(t.X1, t.X2, t.X3)
+		minY := minOfThree(t.Y1, t.Y2, t.Y3)
+		maxY := maxOfThree(t.Y1, t.Y2, t.Y3)
 
-	vsX1, vsY1 := t.X2-t.X1, t.Y2-t.Y1
-	vsX2, vsY2 := t.X3-t.X1, t.Y3-t.Y1
-	for x := minX; x <= maxX; x++ {
-		for y := minY; y <= maxY; y++ {
-			qx, qy := x-t.X1, y-t.Y1
-			s := crossProduct(qx, qy, vsX2, vsY2) / crossProduct(vsX1, vsY1, vsX2, vsY2)
-			t := crossProduct(vsX1, vsY1, qx, qy) / crossProduct(vsX1, vsY1, vsX2, vsY2)
+		vsX1, vsY1 := t.X2-t.X1, t.Y2-t.Y1
+		vsX2, vsY2 := t.X3-t.X1, t.Y3-t.Y1
+		for x := minX; x <= maxX; x++ {
+			for y := minY; y <= maxY; y++ {
+				qx, qy := x-t.X1, y-t.Y1
+				s := crossProduct(qx, qy, vsX2, vsY2) / crossProduct(vsX1, vsY1, vsX2, vsY2)
+				t := crossProduct(vsX1, vsY1, qx, qy) / crossProduct(vsX1, vsY1, vsX2, vsY2)
 
-			if s >= 0 && t >= 0 && s+t <= 1 {
-				r.drawPoint(x, y, red, g, b, a)
+				if s >= 0 && t >= 0 && s+t <= 1 {
+					r.drawPoint(x, y, red, g, b, a)
+				}
 			}
 		}
 	}
-
 }
 
 func (s *Polygon) flatTriangleApproach(r *rasterizer) {
@@ -550,7 +543,8 @@ func main() {
 	//r, err := New(canvas, "/svg/test1.svg")
 	//r, err := New(canvas, "/svg/test2.svg")
 	//r, err := New(canvas, "/svg/test4.svg")
-	r, err := New(canvas, "/svg/test5.svg")
+	//r, err := New(canvas, "/svg/test5.svg")
+	r, err := New(canvas, "/svg/test6.svg")
 	if err != nil {
 		panic(err)
 	}
