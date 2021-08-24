@@ -17,6 +17,75 @@ import (
 	"github.com/nicholasblaskey/svg-rasterizer/board"
 )
 
+type vec2 struct {
+	x float32
+	y float32
+}
+
+func triangulate(points []float32) []Triangle {
+	contour := []vec2{}
+	for i := 0; i < len(points); i += 2 {
+		contour = append(contour, vec2{points[i], points[i+1]})
+	}
+
+	// Initialize list of vertices in the polygon
+	n := len(contour)
+	if n < 3 {
+		return nil
+	}
+
+	// We want a counter-clockwise polygon in V
+	V := []int{}
+	if 0.0 < area(contour) {
+		for v := 0; v < n; v++ {
+			V[v] = v
+		}
+	} else {
+		for v := 0; v < n; v++ {
+			V[v] = (n - 1) - v
+		}
+	}
+
+	nv := n
+
+	// Remove nv-2 Vertices, each time creating a triangle
+	triangles := []Triangle{}
+	count := 2 * nv // Error detection
+	for m, v := 0, nv-1; nv > 2; {
+		// If we loop it is likely a non-simple polygon
+		if 0 >= count {
+			return nil // Error, probably a bad polygon!
+		}
+		count -= 1
+
+		// Three consecutive vertices in current polygon, <u,v,w>
+		u := v
+		if nv <= u { // prev
+			u = 0
+		}
+		v = u + 1
+		if nv <= v { // new v
+			v = 0
+		}
+		w := v + 1
+		if nv <= w { // net
+			w = 0
+		}
+
+		if snip(contour, u, v, w, nv, V) {
+			var a, b, c, s, t int
+			a, b, c = V[u], V[v], V[w]
+
+			triangles = append(triangles, Triangle{
+				contour[a].x, contour[a].y,
+				contour[b].x, contour[b].y,
+				contour[c].x, contour[c].y,
+			})
+		}
+	}
+	return triangles
+}
+
 func maxOfThree(x, y, z float32) float32 {
 	return float32(math.Max(float64(x), math.Max(float64(y), float64(z))))
 }
