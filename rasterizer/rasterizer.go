@@ -75,11 +75,16 @@ func triangulate(points []float32) []*Triangle {
 			w = 0
 		}
 
-		fmt.Println("u,v,w", u, v, w)
+		//fmt.Println("u,v,w", u, v, w)
 
 		if snip(contour, u, v, w, nv, V) {
 			var a, b, c, s, t int
 			a, b, c = V[u], V[v], V[w]
+
+			fmt.Printf("nv %d, (%f, %f, %f, %f, %f, %f)\n", nv,
+				contour[a].x, contour[a].y,
+				contour[b].x, contour[b].y,
+				contour[c].x, contour[c].y)
 
 			triangles = append(triangles, &Triangle{
 				contour[a].x, contour[a].y,
@@ -92,7 +97,7 @@ func triangulate(points []float32) []*Triangle {
 			// Remove v from remaining polygon
 			s, t = v, v+1
 			for t < nv {
-				fmt.Println("s, t", s, t)
+				//fmt.Println("s, t", s, t)
 
 				V[s] = V[t]
 				s += 1
@@ -102,7 +107,7 @@ func triangulate(points []float32) []*Triangle {
 
 			count = 2 * nv // reset error detection counter
 		}
-		fmt.Println("nv", nv)
+		//fmt.Println("nv", nv)
 	}
 	return triangles
 }
@@ -181,6 +186,10 @@ func crossProduct(x1, y1, x2, y2 float32) float32 {
 }
 
 func parseColor(col string) (byte, byte, byte, byte) {
+	if len(col) == 6 { // Add in # if missing
+		col = "#" + col
+	}
+
 	r, _ := strconv.ParseInt(col[1:3], 16, 9)
 	g, _ := strconv.ParseInt(col[3:5], 16, 9)
 	b, _ := strconv.ParseInt(col[5:7], 16, 9)
@@ -317,28 +326,20 @@ func pointsToTriangles(in string) []*Triangle {
 
 	pointsFloat := []float32{}
 	for _, p := range points {
-		xy := strings.Split(p, ",")
-		x, _ := strconv.ParseFloat(xy[0], 32)
-		y, _ := strconv.ParseFloat(xy[1], 32)
+		xy := strings.Split(strings.Trim(p, "\n\r\t "), ",")
+		x, err1 := strconv.ParseFloat(xy[0], 32)
+		y, err2 := strconv.ParseFloat(xy[1], 32)
+		if err1 != nil || err2 != nil { // TODO figure out error handling
+			if err1 != nil {
+				panic(err1)
+			}
+			panic(err2)
+		}
 		pointsFloat = append(pointsFloat, float32(x), float32(y))
 	}
 
 	triangles := triangulate(pointsFloat)
-	fmt.Println("LEN OF TRIANGLES", len(triangles), pointsFloat)
 	for _, t := range triangles {
-
-		//}
-		//for _, t
-		/*
-			t := Triangle{
-				pointsFloat[0],
-				pointsFloat[1],
-				pointsFloat[2],
-				pointsFloat[3],
-				pointsFloat[4],
-				pointsFloat[5],
-			}
-		*/
 		// Sort triangle such that y1 < y2 < y3
 		if t.Y1 > t.Y3 {
 			t.X1, t.Y1, t.X3, t.Y3 = t.X3, t.Y3, t.X1, t.Y1
@@ -354,16 +355,33 @@ func pointsToTriangles(in string) []*Triangle {
 }
 
 func (s *Polygon) rasterize(r *rasterizer) {
-	//s.flatTriangleApproach(r)
-	s.boundingBoxApproach(r)
+	s.flatTriangleApproach(r)
+	//s.boundingBoxApproach(r)
+
+	// TODO figure out how to draw outline
+	// Think we need to unsort and rely on the algorithm to tell us the outline?
+	/*
+	  c = polygon.style.strokeColor;
+	  if( c.a != 0 ) {
+	    int nPoints = polygon.points.size();
+	    for( int i = 0; i < nPoints; i++ ) {
+	      Vector2D p0 = transform(polygon.points[(i+0) % nPoints]);
+	      Vector2D p1 = transform(polygon.points[(i+1) % nPoints]);
+	      rasterize_line( p0.x, p0.y, p1.x, p1.y, c );
+	    }
+	  }
+	*/
 }
 
 func (s *Polygon) boundingBoxApproach(r *rasterizer) {
 	triangles := pointsToTriangles(s.Points)
+	fmt.Println("Len of triangles", len(triangles))
+	//triangles = triangles[:5]
 
 	// TODO for loop these triangles when we start doing filling and polygons
 	//t := triangles[0]
 	for _, t := range triangles {
+
 		red, g, b, a := parseColor(s.Fill)
 
 		minX := minOfThree(t.X1, t.X2, t.X3)
@@ -376,6 +394,7 @@ func (s *Polygon) boundingBoxApproach(r *rasterizer) {
 		for x := minX; x <= maxX; x++ {
 			for y := minY; y <= maxY; y++ {
 				qx, qy := x-t.X1, y-t.Y1
+
 				s := crossProduct(qx, qy, vsX2, vsY2) / crossProduct(vsX1, vsY1, vsX2, vsY2)
 				t := crossProduct(vsX1, vsY1, qx, qy) / crossProduct(vsX1, vsY1, vsX2, vsY2)
 
@@ -391,30 +410,25 @@ func (s *Polygon) flatTriangleApproach(r *rasterizer) {
 	triangles := pointsToTriangles(s.Points)
 
 	// TODO for loop these triangles when we start doing filling and polygons
-	t := triangles[0]
-	red, g, b, a := parseColor(s.Fill)
+	for _, t := range triangles {
+		red, g, b, a := parseColor(s.Fill)
 
-	// http://www.sunshine2k.de/coding/java/TriangleRasterization/TriangleRasterization.html
-	if t.Y2 == t.Y3 { // Only flat bottom triangle
-		r.drawFlatBottomTriangle(t.X1, t.Y1, t.X2, t.Y2, t.X3, t.Y3, red, g, b, a)
-		return
-	} else if t.Y1 == t.Y2 { // Only flat top triangle
-		r.drawFlatTopTriangle(t.X1, t.Y1, t.X2, t.Y2, t.X3, t.Y3, red, g, b, a)
-		return
+		// http://www.sunshine2k.de/coding/java/TriangleRasterization/TriangleRasterization.html
+		if t.Y2 == t.Y3 { // Only flat bottom triangle
+			r.drawFlatBottomTriangle(t.X1, t.Y1, t.X2, t.Y2, t.X3, t.Y3, red, g, b, a)
+			return
+		} else if t.Y1 == t.Y2 { // Only flat top triangle
+			r.drawFlatTopTriangle(t.X1, t.Y1, t.X2, t.Y2, t.X3, t.Y3, red, g, b, a)
+			return
+		}
+
+		// Split triangle into a topflat and bottom flat triangle
+		x4 := t.X1 + (t.Y2-t.Y1)/(t.Y3-t.Y1)*(t.X3-t.X1)
+		y4 := t.Y2
+
+		r.drawFlatBottomTriangle(t.X1, t.Y1, t.X2, t.Y2, x4, y4, red, g, b, a)
+		r.drawFlatTopTriangle(t.X2, t.Y2, x4, y4, t.X3, t.Y3, red, g, b, a)
 	}
-
-	// Split triangle into a topflat and bottom flat triangle
-	x4 := t.X1 + (t.Y2-t.Y1)/(t.Y3-t.Y1)*(t.X3-t.X1)
-	y4 := t.Y2
-
-	r.drawFlatBottomTriangle(t.X1, t.Y1, t.X2, t.Y2, x4, y4, red, g, b, a)
-	r.drawFlatTopTriangle(t.X2, t.Y2, x4, y4, t.X3, t.Y3, red, g, b, a)
-
-	/*
-		r.drawLine(t.X1, t.Y1, t.X2, t.Y2, red, g, b, a)
-		r.drawLine(t.X2, t.Y2, t.X3, t.Y3, red, g, b, a)
-		r.drawLine(t.X3, t.Y3, t.X1, t.Y1, red, g, b, a)
-	*/
 }
 
 func (r *rasterizer) drawFlatBottomTriangle(x1, y1, x2, y2, x3, y3 float32, red, g, b, a byte) {
@@ -435,7 +449,6 @@ func (r *rasterizer) drawFlatTopTriangle(x1, y1, x2, y2, x3, y3 float32, red, g,
 	curX1, curX2 := x3, x3
 
 	for scanLineY := y3; scanLineY > y1; scanLineY-- {
-		fmt.Println(curX1, scanLineY, curX2)
 		r.drawLine(curX1, scanLineY, curX2, scanLineY, red, g, b, a)
 
 		curX1 -= invSlope1
@@ -544,7 +557,7 @@ func main() {
 	//r, err := New(canvas, "/svg/test2.svg")
 	//r, err := New(canvas, "/svg/test4.svg")
 	//r, err := New(canvas, "/svg/test5.svg")
-	r, err := New(canvas, "/svg/test6.svg")
+	r, err := New(canvas, "/svg/test3.svg")
 	if err != nil {
 		panic(err)
 	}
