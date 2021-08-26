@@ -81,10 +81,12 @@ func triangulate(points []float32) []*Triangle {
 			var a, b, c, s, t int
 			a, b, c = V[u], V[v], V[w]
 
-			fmt.Printf("nv %d, (%f, %f, %f, %f, %f, %f)\n", nv,
-				contour[a].x, contour[a].y,
-				contour[b].x, contour[b].y,
-				contour[c].x, contour[c].y)
+			/*
+				fmt.Printf("nv %d, (%f, %f, %f, %f, %f, %f)\n", nv,
+					contour[a].x, contour[a].y,
+					contour[b].x, contour[b].y,
+					contour[c].x, contour[c].y)
+			*/
 
 			triangles = append(triangles, &Triangle{
 				contour[a].x, contour[a].y,
@@ -233,8 +235,12 @@ func (s *Rect) rasterize(r *rasterizer) {
 
 func (r *rasterizer) drawPoint(x, y float32, red, g, b, a byte) {
 	// TODO is this width and height divide right?
-	xCoord := int(x * float32(r.widthPixels) / r.width)
-	yCoord := r.heightPixels - int(y*float32(r.heightPixels)/r.height)
+	//xCoord := int(x * float32(r.widthPixels) / r.width)
+	//yCoord := r.heightPixels - int(y*float32(r.heightPixels)/r.height)
+	x, y = x*float32(r.widthPixels)/r.width, y*float32(r.heightPixels)/r.height
+	x = float32(math.Round(float64(x)))
+	y = float32(math.Round(float64(y)))
+	xCoord, yCoord := int(x), r.heightPixels-int(y)
 
 	if xCoord < 0 || xCoord >= r.widthPixels ||
 		yCoord < 0 || yCoord >= r.heightPixels {
@@ -336,6 +342,7 @@ func pointsToTriangles(in string) []*Triangle {
 			panic(err2)
 		}
 		pointsFloat = append(pointsFloat, float32(x), float32(y))
+
 	}
 
 	triangles := triangulate(pointsFloat)
@@ -350,13 +357,14 @@ func pointsToTriangles(in string) []*Triangle {
 		if t.Y2 > t.Y3 {
 			t.X2, t.Y2, t.X3, t.Y3 = t.X3, t.Y3, t.X2, t.Y2
 		}
+
 	}
 	return triangles //[]Triangle{t}
 }
 
 func (s *Polygon) rasterize(r *rasterizer) {
-	s.flatTriangleApproach(r)
-	//s.boundingBoxApproach(r)
+	//s.flatTriangleApproach(r)
+	s.boundingBoxApproach(r)
 
 	// TODO figure out how to draw outline
 	// Think we need to unsort and rely on the algorithm to tell us the outline?
@@ -375,12 +383,14 @@ func (s *Polygon) rasterize(r *rasterizer) {
 
 func (s *Polygon) boundingBoxApproach(r *rasterizer) {
 	triangles := pointsToTriangles(s.Points)
-	fmt.Println("Len of triangles", len(triangles))
+	fmt.Println("Len of triangles", len(triangles), r.widthPixels, r.heightPixels)
 	//triangles = triangles[:5]
 
 	// TODO for loop these triangles when we start doing filling and polygons
 	//t := triangles[0]
 	for _, t := range triangles {
+
+		fmt.Println(t)
 
 		red, g, b, a := parseColor(s.Fill)
 
@@ -556,8 +566,8 @@ func main() {
 	//r, err := New(canvas, "/svg/test1.svg")
 	//r, err := New(canvas, "/svg/test2.svg")
 	//r, err := New(canvas, "/svg/test4.svg")
-	//r, err := New(canvas, "/svg/test5.svg")
-	r, err := New(canvas, "/svg/test3.svg")
+	r, err := New(canvas, "/svg/test5.svg")
+	//r, err := New(canvas, "/svg/test3.svg")
 	if err != nil {
 		panic(err)
 	}
