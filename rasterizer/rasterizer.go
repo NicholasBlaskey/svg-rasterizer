@@ -529,7 +529,16 @@ func New(canvas js.Value, filePath string) (*rasterizer, error) {
 	if err != nil {
 		panic(err)
 	}
-	//b.EnablePixelInspector(true)
+
+	pixelInspectorOn := false
+	js.Global().Call("addEventListener", "keydown", js.FuncOf(
+		func(this js.Value, args []js.Value) interface{} {
+			if args[0].Get("keyCode").Int() == 90 { // z
+				b.EnablePixelInspector(pixelInspectorOn)
+				pixelInspectorOn = !pixelInspectorOn
+			}
+			return nil
+		}))
 
 	r.board = b
 
