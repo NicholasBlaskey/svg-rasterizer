@@ -235,12 +235,14 @@ func (s *Rect) rasterize(r *rasterizer) {
 
 func (r *rasterizer) drawPoint(x, y float32, red, g, b, a byte) {
 	// TODO is this width and height divide right?
-	//xCoord := int(x * float32(r.widthPixels) / r.width)
-	//yCoord := r.heightPixels - int(y*float32(r.heightPixels)/r.height)
-	x, y = x*float32(r.widthPixels)/r.width, y*float32(r.heightPixels)/r.height
-	x = float32(math.Round(float64(x)))
-	y = float32(math.Round(float64(y)))
-	xCoord, yCoord := int(x), r.heightPixels-int(y)
+	xCoord := int(x * float32(r.widthPixels) / r.width)
+	yCoord := r.heightPixels - int(y*float32(r.heightPixels)/r.height)
+	/*
+		x, y = x*float32(r.widthPixels)/r.width, y*float32(r.heightPixels)/r.height
+		x = float32(math.Round(float64(x)))
+		y = float32(math.Round(float64(y)))
+		xCoord, yCoord := int(x), r.heightPixels-int(y)
+	*/
 
 	if xCoord < 0 || xCoord >= r.widthPixels ||
 		yCoord < 0 || yCoord >= r.heightPixels {
@@ -394,6 +396,12 @@ func (s *Polygon) boundingBoxApproach(r *rasterizer) {
 
 		red, g, b, a := parseColor(s.Fill)
 
+		/*
+			r.drawLine(t.X1, t.Y1, t.X2, t.Y2, red, g, b, a)
+			r.drawLine(t.X2, t.Y2, t.X3, t.Y3, red, g, b, a)
+			r.drawLine(t.X1, t.Y1, t.X3, t.Y3, red, g, b, a)
+		*/
+
 		minX := minOfThree(t.X1, t.X2, t.X3)
 		maxX := maxOfThree(t.X1, t.X2, t.X3)
 		minY := minOfThree(t.Y1, t.Y2, t.Y3)
@@ -401,8 +409,8 @@ func (s *Polygon) boundingBoxApproach(r *rasterizer) {
 
 		vsX1, vsY1 := t.X2-t.X1, t.Y2-t.Y1
 		vsX2, vsY2 := t.X3-t.X1, t.Y3-t.Y1
-		for x := minX; x <= maxX; x++ {
-			for y := minY; y <= maxY; y++ {
+		for x := float32(int(minX)); x <= maxX; x++ {
+			for y := float32(int(minY)); y <= maxY; y++ {
 				qx, qy := x-t.X1, y-t.Y1
 
 				s := crossProduct(qx, qy, vsX2, vsY2) / crossProduct(vsX1, vsY1, vsX2, vsY2)
@@ -421,6 +429,13 @@ func (s *Polygon) flatTriangleApproach(r *rasterizer) {
 
 	// TODO for loop these triangles when we start doing filling and polygons
 	for _, t := range triangles {
+		/*
+			red, g, b, a := parseColor(s.Fill)
+			r.drawLine(t.X1, t.Y1, t.X2, t.Y2, red, g, b, a)
+			r.drawLine(t.X2, t.Y2, t.X3, t.Y3, red, g, b, a)
+			r.drawLine(t.X1, t.Y1, t.X3, t.Y3, red, g, b, a)
+		*/
+
 		red, g, b, a := parseColor(s.Fill)
 
 		// http://www.sunshine2k.de/coding/java/TriangleRasterization/TriangleRasterization.html
@@ -438,6 +453,7 @@ func (s *Polygon) flatTriangleApproach(r *rasterizer) {
 
 		r.drawFlatBottomTriangle(t.X1, t.Y1, t.X2, t.Y2, x4, y4, red, g, b, a)
 		r.drawFlatTopTriangle(t.X2, t.Y2, x4, y4, t.X3, t.Y3, red, g, b, a)
+
 	}
 }
 
@@ -565,9 +581,9 @@ func main() {
 
 	//r, err := New(canvas, "/svg/test1.svg")
 	//r, err := New(canvas, "/svg/test2.svg")
+	//r, err := New(canvas, "/svg/test3.svg")
 	//r, err := New(canvas, "/svg/test4.svg")
 	r, err := New(canvas, "/svg/test5.svg")
-	//r, err := New(canvas, "/svg/test3.svg")
 	if err != nil {
 		panic(err)
 	}
