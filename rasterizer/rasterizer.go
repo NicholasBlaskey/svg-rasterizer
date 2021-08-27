@@ -218,6 +218,7 @@ type Svg struct {
 	Rects    []Rect    `xml:"rect"`
 	Lines    []Line    `xml:"line"`
 	Polygons []Polygon `xml:"polygon"`
+	Groups   []Svg     `xml:"g"`
 }
 
 type Rect struct {
@@ -576,17 +577,23 @@ func (r *rasterizer) Draw() {
 		r.pixels[i] = 255
 	}
 
-	for _, rect := range r.svg.Rects {
+	r.svg.rasterize(r)
+	r.board.SetPixels(r.pixels)
+}
+
+func (s *Svg) rasterize(r *rasterizer) {
+	for _, rect := range s.Rects {
 		rect.rasterize(r)
 	}
-	for _, line := range r.svg.Lines {
+	for _, line := range s.Lines {
 		line.rasterize(r)
 	}
-	for _, polygon := range r.svg.Polygons {
+	for _, polygon := range s.Polygons {
 		polygon.rasterize(r)
 	}
-
-	r.board.SetPixels(r.pixels)
+	for _, group := range s.Groups {
+		group.rasterize(r)
+	}
 }
 
 func getFile(filePath string) string {
