@@ -534,8 +534,8 @@ func New(canvas js.Value, filePath string) (*rasterizer, error) {
 	js.Global().Call("addEventListener", "keydown", js.FuncOf(
 		func(this js.Value, args []js.Value) interface{} {
 			if args[0].Get("keyCode").Int() == 90 { // z
-				b.EnablePixelInspector(pixelInspectorOn)
 				pixelInspectorOn = !pixelInspectorOn
+				b.EnablePixelInspector(pixelInspectorOn)
 			}
 			return nil
 		}))
@@ -591,8 +591,8 @@ func main() {
 	//r, err := New(canvas, "/svg/test1.svg")
 	//r, err := New(canvas, "/svg/test2.svg")
 	//r, err := New(canvas, "/svg/test3.svg")
-	//r, err := New(canvas, "/svg/test4.svg")
-	r, err := New(canvas, "/svg/test5.svg")
+	r, err := New(canvas, "/svg/test4.svg")
+	//r, err := New(canvas, "/svg/test5.svg")
 	if err != nil {
 		panic(err)
 	}

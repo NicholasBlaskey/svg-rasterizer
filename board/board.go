@@ -6,6 +6,8 @@ import (
 
 	mgl "github.com/go-gl/mathgl/mgl32"
 	"github.com/nicholasblaskey/webgl-utils/util"
+
+	"fmt"
 )
 
 type Board struct {
@@ -82,6 +84,7 @@ func (b *Board) EnablePixelInspector(shouldTurnOn bool) {
 
 func (b *Board) initPixelInspector() {
 	// Always have the pixel inspector on and listening
+	fmt.Println(b.Width, b.Height, "TEXELSIZE")
 	texelSizeX := 1.0 / float32(b.Width)
 	texelSizeY := 1.0 / float32(b.Height)
 	b.canvas.Call("addEventListener", "mousemove",
@@ -93,6 +96,8 @@ func (b *Board) initPixelInspector() {
 			// not on the edge of a pixel.
 			b.mouseX = (x*texelSizeX + texelSizeX/2 - 0.5) * 2.0
 			b.mouseY = (1.0 - y*texelSizeY + texelSizeY/2 - 0.5) * 2.0
+
+			fmt.Println(b.mouseX, b.mouseY, x, y, b.Width, b.Height)
 
 			if b.pixelInspectorOn {
 				b.draw()
@@ -409,11 +414,18 @@ func (b *Board) draw() {
 	}
 
 	// Draw the pixel inpector
-	b.gl.Viewport(w/2, h/2, w/2, h/2)
+	inspectorWidth, inspectorHeight := w/3, h/3
+	if w < h { // Correct for aspect ratio to ensure out pixel inspector is a square
+		inspectorWidth = inspectorHeight
+	} else {
+		inspectorHeight = inspectorWidth
+	}
+
+	b.gl.Viewport(w-inspectorWidth, h-inspectorHeight, inspectorWidth, inspectorHeight)
 
 	// Draw black box around viewport to be used for pixel borders.
 	b.gl.Enable(webgl.SCISSOR_TEST)
-	b.gl.Scissor(b.Width/2, b.Height/2, b.Width/2, b.Height/2)
+	b.gl.Scissor(w-inspectorWidth, h-inspectorWidth, inspectorWidth, inspectorWidth)
 	b.gl.ClearColor(0.0, 0, 0.0, 1.0)
 	b.gl.Clear(webgl.COLOR_BUFFER_BIT)
 	b.gl.Disable(webgl.SCISSOR_TEST)
