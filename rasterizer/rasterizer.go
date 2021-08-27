@@ -314,8 +314,9 @@ func (r *rasterizer) bresenham(x1, y1, x2, slope float32, red, g, b, a byte, fli
 }
 
 type Polygon struct {
-	Fill   string `xml:"fill,attr"`
-	Points string `xml:"points,attr"`
+	Fill      string `xml:"fill,attr"`
+	Points    string `xml:"points,attr"`
+	Transform string `xml:"transform,attr"`
 }
 
 type Triangle struct {
@@ -327,9 +328,36 @@ type Triangle struct {
 	Y3 float32
 }
 
-func pointsToTriangles(in string) []*Triangle {
-	// TODO implmenet an algorithm to convert polygons into triangles
-	// https://stackoverflow.com/questions/7316000/convert-polygon-to-triangles
+func transform(points []float32, trans string) []float32 {
+	if strings.Contains(trans, "matrix") { // Matrix transformation case
+		trans = strings.TrimPrefix(trans, "matrix(")
+		trans = strings.Trim(trans, " )\n\t\r")
+
+		matrixVals := []float32{}
+		for _, s := range strings.Split(trans, ",") {
+			x, err := strconv.ParseFloat(s, 32)
+			if err != nil {
+				panic(err)
+			}
+			matrixVals = append(matrixVals, float32(x))
+		}
+		a, b := matrixVals[0], matrixVals[1]
+		c, d, e, f := matrixVals[2], matrixVals[3], matrixVals[4], matrixVals[5]
+
+		// Apply the transformation to each point
+		// TODO do multiple block level transforms.
+		for i := 0; i < len(points); i += 2 {
+			x, y := points[i], points[i+1]
+			points[i] = a*x + c*y + e*1
+			points[i+1] = b*x + d*y + f*1
+		}
+
+	}
+
+	return points
+}
+
+func pointsToTriangles(in string, transformation string) []*Triangle {
 	points := strings.Split(strings.Trim(in, " "), " ")
 
 	pointsFloat := []float32{}
@@ -344,8 +372,9 @@ func pointsToTriangles(in string) []*Triangle {
 			panic(err2)
 		}
 		pointsFloat = append(pointsFloat, float32(x), float32(y))
-
 	}
+
+	pointsFloat = transform(pointsFloat, transformation)
 
 	triangles := triangulate(pointsFloat)
 	for _, t := range triangles {
@@ -384,16 +413,12 @@ func (s *Polygon) rasterize(r *rasterizer) {
 }
 
 func (s *Polygon) boundingBoxApproach(r *rasterizer) {
-	triangles := pointsToTriangles(s.Points)
-	fmt.Println("Len of triangles", len(triangles), r.widthPixels, r.heightPixels)
+	triangles := pointsToTriangles(s.Points, s.Transform)
 	//triangles = triangles[:5]
 
 	// TODO for loop these triangles when we start doing filling and polygons
 	//t := triangles[0]
 	for _, t := range triangles {
-
-		fmt.Println(t)
-
 		red, g, b, a := parseColor(s.Fill)
 
 		/*
@@ -422,10 +447,11 @@ func (s *Polygon) boundingBoxApproach(r *rasterizer) {
 			}
 		}
 	}
+
 }
 
 func (s *Polygon) flatTriangleApproach(r *rasterizer) {
-	triangles := pointsToTriangles(s.Points)
+	triangles := pointsToTriangles(s.Points, s.Transform)
 
 	// TODO for loop these triangles when we start doing filling and polygons
 	for _, t := range triangles {
@@ -520,11 +546,9 @@ func New(canvas js.Value, filePath string) (*rasterizer, error) {
 	r.width = float32(width)
 	r.height = float32(height)
 
-	//fmt.Println("FMT", widthPixels, heightPixels, width, height)
-
 	// Create board.
-	canvas.Set("height", r.widthPixels)
-	canvas.Set("width", r.heightPixels)
+	canvas.Set("width", r.widthPixels)
+	canvas.Set("height", r.heightPixels)
 	b, err := board.New(canvas)
 	if err != nil {
 		panic(err)
@@ -591,8 +615,9 @@ func main() {
 	//r, err := New(canvas, "/svg/test1.svg")
 	//r, err := New(canvas, "/svg/test2.svg")
 	//r, err := New(canvas, "/svg/test3.svg")
-	r, err := New(canvas, "/svg/test4.svg")
+	//r, err := New(canvas, "/svg/test4.svg")
 	//r, err := New(canvas, "/svg/test5.svg")
+	r, err := New(canvas, "/svg/test6.svg")
 	if err != nil {
 		panic(err)
 	}
