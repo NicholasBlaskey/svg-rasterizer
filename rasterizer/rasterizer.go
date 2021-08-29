@@ -359,60 +359,13 @@ func parseTransform(trans string) mgl.Mat3 {
 
 func transform(points []float32, trans mgl.Mat3) []float32 {
 	for i := 0; i < len(points); i += 2 {
-
-		/*
-			x, y := points[i], points[i+1]
-
-			a, b := trans[0], trans[1]
-			c, d, e, f := trans[2], trans[3], trans[4], trans[5]
-			fmt.Println(a*x+c*y+e*1, b*x+d*y+f*1)
-
-			points[i] = a*x + c*y + e*1
-			points[i+1] = b*x + d*y + f*1
-		*/
-		//points[i] = x   //a*x + c*y + e*1
-		//points[i+1] = y //b*x + d*y + f*1
-
-		//fmt.Println(i)
 		xyz := mgl.Vec3{points[i], points[i+1], 1.0}
 		transformed := trans.Mul3x1(xyz)
 		points[i] = transformed[0]
 		points[i+1] = transformed[1]
 	}
-	//fmt.Println("Ending transform")
 	return points
 }
-
-/*
-func transform(points []float32, trans string) []float32 {
-	if strings.Contains(trans, "matrix") { // Matrix transformation case
-		trans = strings.TrimPrefix(trans, "matrix(")
-		trans = strings.Trim(trans, " )\n\t\r")
-
-		matrixVals := []float32{}
-		for _, s := range strings.Split(trans, ",") {
-			x, err := strconv.ParseFloat(s, 32)
-			if err != nil {
-				panic(err)
-			}
-			matrixVals = append(matrixVals, float32(x))
-		}
-		a, b := matrixVals[0], matrixVals[1]
-		c, d, e, f := matrixVals[2], matrixVals[3], matrixVals[4], matrixVals[5]
-
-		// Apply the transformation to each point
-		// TODO do multiple block level transforms.
-		for i := 0; i < len(points); i += 2 {
-			x, y := points[i], points[i+1]
-			points[i] = a*x + c*y + e*1
-			points[i+1] = b*x + d*y + f*1
-		}
-
-	}
-
-	return points
-}
-*/
 
 func pointsToTriangles(in string, transformation mgl.Mat3) []*Triangle {
 	points := strings.Split(strings.Trim(in, " "), " ")
@@ -641,6 +594,8 @@ func (r *rasterizer) Draw() {
 }
 
 func (s *Svg) rasterize(r *rasterizer) {
+	//fmt.Println("svg transform", r.svg.transformMatrix)
+
 	for _, rect := range s.Rects {
 		rect.rasterize(r)
 	}
@@ -649,14 +604,14 @@ func (s *Svg) rasterize(r *rasterizer) {
 	}
 	for _, polygon := range s.Polygons {
 		polygon.transformMatrix = parseTransform(polygon.Transform)
-		//polygon.transformMatrix = r.svg.transformMatrix.Mul3(polygon.transformMatrix)
+		polygon.transformMatrix = s.transformMatrix.Mul3(polygon.transformMatrix)
 
 		polygon.rasterize(r)
 	}
 	for _, group := range s.Groups {
 		// Set transformation matrix for the group.
-		//group.transformMatrix = parseTransform(group.Transform)
-		//group.transformMatrix = r.svg.transformMatrix.Mul3(group.transformMatrix)
+		group.transformMatrix = parseTransform(group.Transform)
+		group.transformMatrix = s.transformMatrix.Mul3(group.transformMatrix)
 
 		group.rasterize(r)
 	}
@@ -691,6 +646,7 @@ func main() {
 	//r, err := New(canvas, "/svg/test4.svg")
 	//r, err := New(canvas, "/svg/test5.svg")
 	r, err := New(canvas, "/svg/test6.svg")
+
 	if err != nil {
 		panic(err)
 	}
