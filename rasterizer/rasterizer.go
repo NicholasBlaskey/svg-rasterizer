@@ -2,6 +2,8 @@ package main
 
 import (
 	"bytes"
+	"encoding/xml"
+	"fmt"
 	"io/ioutil"
 	"math"
 	"math/rand"
@@ -10,9 +12,7 @@ import (
 	"strings"
 	"syscall/js"
 
-	"fmt"
-
-	"encoding/xml"
+	mgl "github.com/go-gl/mathgl/mgl32"
 
 	"github.com/nicholasblaskey/svg-rasterizer/board"
 )
@@ -211,14 +211,16 @@ type rasterizer struct {
 }
 
 type Svg struct {
-	XMLName  xml.Name
-	Width    string    `xml:"width,attr"`
-	Height   string    `xml:"height,attr"`
-	ViewBox  string    `xml:"viewBox,attr"`
-	Rects    []Rect    `xml:"rect"`
-	Lines    []Line    `xml:"line"`
-	Polygons []Polygon `xml:"polygon"`
-	Groups   []Svg     `xml:"g"`
+	XMLName         xml.Name
+	Width           string    `xml:"width,attr"`
+	Height          string    `xml:"height,attr"`
+	ViewBox         string    `xml:"viewBox,attr"`
+	Rects           []Rect    `xml:"rect"`
+	Lines           []Line    `xml:"line"`
+	Polygons        []Polygon `xml:"polygon"`
+	Groups          []Svg     `xml:"g"`
+	Transform       string    `xml:"transform,attr"`
+	transformMatrix mgl.Mat3
 }
 
 type Rect struct {
@@ -315,9 +317,10 @@ func (r *rasterizer) bresenham(x1, y1, x2, slope float32, red, g, b, a byte, fli
 }
 
 type Polygon struct {
-	Fill      string `xml:"fill,attr"`
-	Points    string `xml:"points,attr"`
-	Transform string `xml:"transform,attr"`
+	Fill            string `xml:"fill,attr"`
+	Points          string `xml:"points,attr"`
+	Transform       string `xml:"transform,attr"`
+	transformMatrix mgl.Mat3
 }
 
 type Triangle struct {
@@ -329,6 +332,58 @@ type Triangle struct {
 	Y3 float32
 }
 
+func parseTransform(trans string) mgl.Mat3 {
+	if strings.Contains(trans, "matrix") { // Matrix transformation case
+		trans = strings.TrimPrefix(trans, "matrix(")
+		trans = strings.Trim(trans, " )\n\t\r")
+
+		points := []float32{}
+		for _, s := range strings.Split(trans, ",") {
+			x, err := strconv.ParseFloat(s, 32)
+			if err != nil {
+				panic(err)
+			}
+			points = append(points, float32(x))
+			//mat[i] = float32(x)
+		}
+
+		mat := mgl.Ident3()
+		mat[0], mat[1] = points[0], points[1]
+		mat[3], mat[4] = points[2], points[3]
+		mat[6], mat[7] = points[4], points[5]
+
+		return mat
+	}
+	return mgl.Ident3()
+}
+
+func transform(points []float32, trans mgl.Mat3) []float32 {
+	for i := 0; i < len(points); i += 2 {
+
+		/*
+			x, y := points[i], points[i+1]
+
+			a, b := trans[0], trans[1]
+			c, d, e, f := trans[2], trans[3], trans[4], trans[5]
+			fmt.Println(a*x+c*y+e*1, b*x+d*y+f*1)
+
+			points[i] = a*x + c*y + e*1
+			points[i+1] = b*x + d*y + f*1
+		*/
+		//points[i] = x   //a*x + c*y + e*1
+		//points[i+1] = y //b*x + d*y + f*1
+
+		//fmt.Println(i)
+		xyz := mgl.Vec3{points[i], points[i+1], 1.0}
+		transformed := trans.Mul3x1(xyz)
+		points[i] = transformed[0]
+		points[i+1] = transformed[1]
+	}
+	//fmt.Println("Ending transform")
+	return points
+}
+
+/*
 func transform(points []float32, trans string) []float32 {
 	if strings.Contains(trans, "matrix") { // Matrix transformation case
 		trans = strings.TrimPrefix(trans, "matrix(")
@@ -357,8 +412,9 @@ func transform(points []float32, trans string) []float32 {
 
 	return points
 }
+*/
 
-func pointsToTriangles(in string, transformation string) []*Triangle {
+func pointsToTriangles(in string, transformation mgl.Mat3) []*Triangle {
 	points := strings.Split(strings.Trim(in, " "), " ")
 
 	pointsFloat := []float32{}
@@ -414,7 +470,8 @@ func (s *Polygon) rasterize(r *rasterizer) {
 }
 
 func (s *Polygon) boundingBoxApproach(r *rasterizer) {
-	triangles := pointsToTriangles(s.Points, s.Transform)
+	//fmt.Println(s.transformMatrix)
+	triangles := pointsToTriangles(s.Points, s.transformMatrix)
 	//triangles = triangles[:5]
 
 	// TODO for loop these triangles when we start doing filling and polygons
@@ -452,7 +509,7 @@ func (s *Polygon) boundingBoxApproach(r *rasterizer) {
 }
 
 func (s *Polygon) flatTriangleApproach(r *rasterizer) {
-	triangles := pointsToTriangles(s.Points, s.Transform)
+	triangles := pointsToTriangles(s.Points, s.transformMatrix)
 
 	// TODO for loop these triangles when we start doing filling and polygons
 	for _, t := range triangles {
@@ -577,6 +634,8 @@ func (r *rasterizer) Draw() {
 		r.pixels[i] = 255
 	}
 
+	r.svg.transformMatrix = parseTransform(r.svg.Transform) // Can an SVG element have a transform??
+
 	r.svg.rasterize(r)
 	r.board.SetPixels(r.pixels)
 }
@@ -589,9 +648,16 @@ func (s *Svg) rasterize(r *rasterizer) {
 		line.rasterize(r)
 	}
 	for _, polygon := range s.Polygons {
+		polygon.transformMatrix = parseTransform(polygon.Transform)
+		//polygon.transformMatrix = r.svg.transformMatrix.Mul3(polygon.transformMatrix)
+
 		polygon.rasterize(r)
 	}
 	for _, group := range s.Groups {
+		// Set transformation matrix for the group.
+		//group.transformMatrix = parseTransform(group.Transform)
+		//group.transformMatrix = r.svg.transformMatrix.Mul3(group.transformMatrix)
+
 		group.rasterize(r)
 	}
 }
