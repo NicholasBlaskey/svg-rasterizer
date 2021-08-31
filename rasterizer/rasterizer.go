@@ -318,6 +318,7 @@ func (r *rasterizer) bresenham(x1, y1, x2, slope float32, red, g, b, a byte, fli
 
 type Polygon struct {
 	Fill            string `xml:"fill,attr"`
+	Stroke          string `xml:"stroke,attr"`
 	Points          string `xml:"points,attr"`
 	Transform       string `xml:"transform,attr"`
 	transformMatrix mgl.Mat3
@@ -367,7 +368,7 @@ func transform(points []float32, trans mgl.Mat3) []float32 {
 	return points
 }
 
-func pointsToTriangles(in string, transformation mgl.Mat3) []*Triangle {
+func pointsToTriangles(in string, transformation mgl.Mat3) ([]*Triangle, []float32) {
 	points := strings.Split(strings.Trim(in, " "), " ")
 
 	pointsFloat := []float32{}
@@ -400,44 +401,22 @@ func pointsToTriangles(in string, transformation mgl.Mat3) []*Triangle {
 		}
 
 	}
-	return triangles //[]Triangle{t}
+	return triangles, pointsFloat
 }
 
 func (s *Polygon) rasterize(r *rasterizer) {
 	//s.flatTriangleApproach(r)
 	s.boundingBoxApproach(r)
-
-	// TODO figure out how to draw outline
-	// Think we need to unsort and rely on the algorithm to tell us the outline?
-	/*
-	  c = polygon.style.strokeColor;
-	  if( c.a != 0 ) {
-	    int nPoints = polygon.points.size();
-	    for( int i = 0; i < nPoints; i++ ) {
-	      Vector2D p0 = transform(polygon.points[(i+0) % nPoints]);
-	      Vector2D p1 = transform(polygon.points[(i+1) % nPoints]);
-	      rasterize_line( p0.x, p0.y, p1.x, p1.y, c );
-	    }
-	  }
-	*/
 }
 
 func (s *Polygon) boundingBoxApproach(r *rasterizer) {
 	//fmt.Println(s.transformMatrix)
-	triangles := pointsToTriangles(s.Points, s.transformMatrix)
-	//triangles = triangles[:5]
+	triangles, points := pointsToTriangles(s.Points, s.transformMatrix)
 
 	// TODO for loop these triangles when we start doing filling and polygons
 	//t := triangles[0]
+	red, g, b, a := parseColor(s.Fill)
 	for _, t := range triangles {
-		red, g, b, a := parseColor(s.Fill)
-
-		/*
-			r.drawLine(t.X1, t.Y1, t.X2, t.Y2, red, g, b, a)
-			r.drawLine(t.X2, t.Y2, t.X3, t.Y3, red, g, b, a)
-			r.drawLine(t.X1, t.Y1, t.X3, t.Y3, red, g, b, a)
-		*/
-
 		minX := minOfThree(t.X1, t.X2, t.X3)
 		maxX := maxOfThree(t.X1, t.X2, t.X3)
 		minY := minOfThree(t.Y1, t.Y2, t.Y3)
@@ -459,10 +438,28 @@ func (s *Polygon) boundingBoxApproach(r *rasterizer) {
 		}
 	}
 
+	outlineRed, outlineG, outlineB, outlineA := parseColor(s.Stroke)
+	for i := 0; i < len(points); i += 2 {
+		p1X, p1Y := points[i], points[i+1]
+		p2X, p2Y := points[(i+2)%len(points)], points[(i+3)%len(points)]
+		r.drawLine(p1X, p1Y, p2X, p2Y, outlineRed, outlineG, outlineB, outlineA)
+	}
+
+	/*
+	  c = polygon.style.strokeColor;
+	  if( c.a != 0 ) {
+	    int nPoints = polygon.points.size();
+	    for( int i = 0; i < nPoints; i++ ) {
+	      Vector2D p0 = transform(polygon.points[(i+0) % nPoints]);
+	      Vector2D p1 = transform(polygon.points[(i+1) % nPoints]);
+	      rasterize_line( p0.x, p0.y, p1.x, p1.y, c );
+	    }
+	  }
+	*/
 }
 
 func (s *Polygon) flatTriangleApproach(r *rasterizer) {
-	triangles := pointsToTriangles(s.Points, s.transformMatrix)
+	triangles, _ := pointsToTriangles(s.Points, s.transformMatrix)
 
 	// TODO for loop these triangles when we start doing filling and polygons
 	for _, t := range triangles {
