@@ -24,6 +24,15 @@ type Color struct {
 	a byte
 }
 
+func (c Color) AdjustBrightness(x float32) Color {
+	c.r = byte(float32(c.r) * x)
+	c.g = byte(float32(c.g) * x)
+	c.b = byte(float32(c.b) * x)
+	// TODO Do we need to worry about alpha here?
+
+	return c
+}
+
 type vec2 struct {
 	x float32
 	y float32
@@ -657,9 +666,9 @@ func main() {
 	//r, err := New(canvas, "/svg/test1.svg")
 	//r, err := New(canvas, "/svg/test2.svg")
 	//r, err := New(canvas, "/svg/test3.svg")
-	r, err := New(canvas, "/svg/test4.svg")
+	//r, err := New(canvas, "/svg/test4.svg")
 	//r, err := New(canvas, "/svg/test5.svg")
-	//r, err := New(canvas, "/svg/test6.svg")
+	r, err := New(canvas, "/svg/test6.svg")
 
 	if err != nil {
 		panic(err)
@@ -673,41 +682,6 @@ func main() {
 	r.Draw()
 
 	fmt.Println("starting", rand.Int31n(256))
-
-	/*
-		data := []byte{}
-		white := false
-		for i := 0; i < b.Width; i++ {
-			white = i%2 == 0
-			for j := 0; j < b.Height; j++ {
-				if white {
-					data = append(data, 255)
-				} else {
-					data = append(data, 0)
-				}
-				white = !white
-			}
-		}
-		b.SetPixels(data)
-	*/
-
-	/*
-		data := []byte{}
-		for i := 0; i < b.Width/10; i++ {
-			col1, col2 := byte(rand.Int31n(256)), byte(rand.Int31n(256))
-
-			for k := 0; k < 10; k++ {
-
-				for j := 0; j < b.Height/2; j++ {
-					data = append(data, col1)
-				}
-				for j := b.Height / 2; j < b.Height; j++ {
-					data = append(data, col2)
-				}
-			}
-		}
-		b.SetPixels(data)
-	*/
 
 	<-make(chan bool) // Prevent program from exiting
 }
@@ -748,11 +722,11 @@ func (r *rasterizer) drawXialin(x0, y0, x1, y1 float32, col Color) {
 	xpxl1 := xend // This will be used in the main loop
 	ypxl1 := float32(int(yend))
 	if steep {
-		r.drawPoint(ypxl1, xpxl1, col)
-		r.drawPoint(ypxl1+1, xpxl1, col)
+		r.drawPoint(ypxl1, xpxl1, col.AdjustBrightness(rfpart(yend)*xgap))
+		r.drawPoint(ypxl1+1, xpxl1, col.AdjustBrightness(fpart(yend)*xgap))
 	} else {
-		r.drawPoint(xpxl1, ypxl1, col)
-		r.drawPoint(xpxl1, ypxl1+1, col)
+		r.drawPoint(xpxl1, ypxl1, col.AdjustBrightness(rfpart(yend)*xgap))
+		r.drawPoint(xpxl1, ypxl1+1, col.AdjustBrightness(fpart(yend)*xgap))
 	}
 	intery := yend + gradient // first y-intersection for the main loop
 
@@ -763,27 +737,24 @@ func (r *rasterizer) drawXialin(x0, y0, x1, y1 float32, col Color) {
 	xpxl2 := xend // This will be used in the main loop
 	ypxl2 := float32(int(yend))
 	if steep {
-		r.drawPoint(ypxl2, xpxl2, col)
-		r.drawPoint(ypxl2+1, xpxl2, col)
+		r.drawPoint(ypxl2, xpxl2, col.AdjustBrightness(rfpart(yend)*xgap))
+		r.drawPoint(ypxl2+1, xpxl2, col.AdjustBrightness(fpart(yend)*xgap))
 	} else {
-		r.drawPoint(xpxl2, ypxl2, col)
-		r.drawPoint(xpxl2, ypxl2+1, col)
+		r.drawPoint(xpxl2, ypxl2, col.AdjustBrightness(rfpart(yend)*xgap))
+		r.drawPoint(xpxl2, ypxl2+1, col.AdjustBrightness(fpart(yend)*xgap))
 	}
-
-	_ = xgap
-	_ = intery
 
 	// Main loop
 	if steep {
 		for x := xpxl1 + 1; x <= xpxl2-1; x++ {
-			r.drawPoint(intery, x, col)
-			r.drawPoint(intery+1, x, col)
+			r.drawPoint(intery, x, col.AdjustBrightness(rfpart(intery)))
+			r.drawPoint(intery+1, x, col.AdjustBrightness(fpart(intery)))
 			intery = intery + gradient
 		}
 	} else {
 		for x := xpxl1 + 1; x <= xpxl2-1; x++ {
-			r.drawPoint(x, intery, col)
-			r.drawPoint(x, intery+1, col)
+			r.drawPoint(x, intery, col.AdjustBrightness(rfpart(intery)))
+			r.drawPoint(x, intery+1, col.AdjustBrightness(fpart(intery)))
 			intery = intery + gradient
 		}
 	}
