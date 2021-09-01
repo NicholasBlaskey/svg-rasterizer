@@ -18,18 +18,30 @@ import (
 )
 
 type Color struct {
-	r byte
-	g byte
-	b byte
-	a byte
+	r float32
+	g float32
+	b float32
+	a float32
 }
 
 func (c Color) AdjustBrightness(x float32) Color {
-	c.r = byte(float32(c.r) * x)
-	c.g = byte(float32(c.g) * x)
-	c.b = byte(float32(c.b) * x)
+	/*
+		c.r = float32(c.r) * x // + 1.0*(1-x)
+		c.g = float32(c.g) * x //+ 1.0*(1-x)
+		c.b = float32(c.b) * x //+ 1.0*(1-x)
+	*/
 	// TODO Do we need to worry about alpha here?
 
+	/*
+		c.r = x
+		c.g = x
+		c.b = x
+	*/
+	/*
+		c.r = 0.0
+		c.g = 0.0
+		c.b = 0.0
+	*/
 	return c
 }
 
@@ -217,7 +229,12 @@ func parseColor(col string) Color {
 	b, _ := strconv.ParseInt(col[5:7], 16, 9)
 	a := 255
 
-	return Color{byte(r), byte(g), byte(b), byte(a)}
+	return Color{
+		float32(r) / 255.0,
+		float32(g) / 255.0,
+		float32(b) / 255.0,
+		float32(a) / 255.0,
+	}
 }
 
 type rasterizer struct {
@@ -272,10 +289,10 @@ func (r *rasterizer) drawPoint(x, y float32, col Color) {
 		return
 	}
 
-	r.pixels[(xCoord+yCoord*r.widthPixels)*4] = col.r
-	r.pixels[(xCoord+yCoord*r.widthPixels)*4+1] = col.g
-	r.pixels[(xCoord+yCoord*r.widthPixels)*4+2] = col.b
-	r.pixels[(xCoord+yCoord*r.widthPixels)*4+3] = col.a
+	r.pixels[(xCoord+yCoord*r.widthPixels)*4] = byte(col.r * 255.0)
+	r.pixels[(xCoord+yCoord*r.widthPixels)*4+1] = byte(col.g * 255.0)
+	r.pixels[(xCoord+yCoord*r.widthPixels)*4+2] = byte(col.b * 255.0)
+	r.pixels[(xCoord+yCoord*r.widthPixels)*4+3] = byte(col.a * 255.0)
 }
 
 type Line struct {
@@ -291,6 +308,7 @@ func (s *Line) rasterize(r *rasterizer) {
 	r.drawLine(s.X1, s.Y1, s.X2, s.Y2, col)
 }
 
+/*
 func (r *rasterizer) drawLine(x1, y1, x2, y2 float32, col Color) {
 	slope := (y2 - y1) / (x2 - x1)
 
@@ -335,6 +353,7 @@ func (r *rasterizer) bresenham(x1, y1, x2, slope float32, col Color, flipped boo
 		}
 	}
 }
+*/
 
 type Polygon struct {
 	Fill            string `xml:"fill,attr"`
@@ -474,7 +493,7 @@ func (s *Polygon) boundingBoxApproach(r *rasterizer) {
 	for i := 0; i < len(points); i += 2 {
 		p1X, p1Y := points[i], points[i+1]
 		p2X, p2Y := points[(i+2)%len(points)], points[(i+3)%len(points)]
-		r.drawXialin(p1X, p1Y, p2X, p2Y, outlineCol)
+		r.drawLine(p1X, p1Y, p2X, p2Y, outlineCol)
 	}
 
 }
@@ -698,6 +717,63 @@ func rfpart(x float32) float32 {
 	return 1.0 - fpart(x)
 }
 
+func (r *rasterizer) drawLine(x0, y0, x1, y1 float32, col Color) {
+	steep := math.Abs(float64(y1-y0)) > math.Abs(float64(x1-x0))
+	if steep {
+		x0, y0 = y0, x0
+		x1, y1 = y1, x1
+	}
+
+	if x0 > x1 {
+		x0, x1 = x1, x0
+		y0, y1 = y1, y0
+	}
+
+	dx := x1 - x0
+	dy := y1 - y0
+	gradient := dy / dx
+	if dx == 0.0 {
+		gradient = 1.0
+	}
+
+	// Handle first endpoint
+	xend := round(x0)
+	yend := y0 + gradient*(xend-x0)
+	xpxl1 := xend // This will be used in the main loop
+	ypxl1 := float32(int(yend))
+	if steep {
+		r.drawPoint(ypxl1, xpxl1, col)
+	} else {
+		r.drawPoint(xpxl1, ypxl1, col)
+	}
+	intery := yend + gradient // first y-intersection for the main loop
+
+	// Handle second endpoint
+	xend = round(x1)
+	yend = y1 + gradient*(xend-x1)
+	xpxl2 := xend // This will be used in the main loop
+	ypxl2 := float32(int(yend))
+	if steep {
+		r.drawPoint(ypxl2, xpxl2, col)
+	} else {
+		r.drawPoint(xpxl2, ypxl2, col)
+	}
+
+	// Main loop
+	if steep {
+		for x := xpxl1 + 1; x <= xpxl2-1; x++ {
+			r.drawPoint(intery, x, col)
+			intery += gradient
+		}
+	} else {
+		for x := xpxl1 + 1; x <= xpxl2-1; x++ {
+			r.drawPoint(x, intery, col)
+			intery += gradient
+		}
+	}
+}
+
+/*
 // https://en.wikipedia.org/wiki/Xiaolin_Wu's_line_algorithm
 func (r *rasterizer) drawXialin(x0, y0, x1, y1 float32, col Color) {
 	steep := math.Abs(float64(y1-y0)) > math.Abs(float64(x1-x0))
@@ -714,6 +790,9 @@ func (r *rasterizer) drawXialin(x0, y0, x1, y1 float32, col Color) {
 	dx := x1 - x0
 	dy := y1 - y0
 	gradient := dy / dx
+	if dx == 0.0 {
+		gradient = 1.0
+	}
 
 	// Handle first endpoint
 	xend := round(x0)
@@ -749,13 +828,14 @@ func (r *rasterizer) drawXialin(x0, y0, x1, y1 float32, col Color) {
 		for x := xpxl1 + 1; x <= xpxl2-1; x++ {
 			r.drawPoint(intery, x, col.AdjustBrightness(rfpart(intery)))
 			r.drawPoint(intery+1, x, col.AdjustBrightness(fpart(intery)))
-			intery = intery + gradient
+			intery += gradient
 		}
 	} else {
 		for x := xpxl1 + 1; x <= xpxl2-1; x++ {
 			r.drawPoint(x, intery, col.AdjustBrightness(rfpart(intery)))
 			r.drawPoint(x, intery+1, col.AdjustBrightness(fpart(intery)))
-			intery = intery + gradient
+			intery += gradient
 		}
 	}
 }
+*/
