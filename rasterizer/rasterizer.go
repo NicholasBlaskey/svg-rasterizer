@@ -410,11 +410,9 @@ func (s *Polygon) rasterize(r *rasterizer) {
 }
 
 func (s *Polygon) boundingBoxApproach(r *rasterizer) {
-	//fmt.Println(s.transformMatrix)
 	triangles, points := pointsToTriangles(s.Points, s.transformMatrix)
 
-	// TODO for loop these triangles when we start doing filling and polygons
-	//t := triangles[0]
+	// Draw each triangle
 	red, g, b, a := parseColor(s.Fill)
 	for _, t := range triangles {
 		minX := minOfThree(t.X1, t.X2, t.X3)
@@ -424,8 +422,12 @@ func (s *Polygon) boundingBoxApproach(r *rasterizer) {
 
 		vsX1, vsY1 := t.X2-t.X1, t.Y2-t.Y1
 		vsX2, vsY2 := t.X3-t.X1, t.Y3-t.Y1
+
 		for x := float32(int(minX)); x <= maxX; x++ {
 			for y := float32(int(minY)); y <= maxY; y++ {
+				//for x := float32(minX); x <= maxX; x++ {
+				//	for y := float32(minY); y <= maxY; y++ {
+
 				qx, qy := x-t.X1, y-t.Y1
 
 				s := crossProduct(qx, qy, vsX2, vsY2) / crossProduct(vsX1, vsY1, vsX2, vsY2)
@@ -433,29 +435,26 @@ func (s *Polygon) boundingBoxApproach(r *rasterizer) {
 
 				if s >= 0 && t >= 0 && s+t <= 1 {
 					r.drawPoint(x, y, red, g, b, a)
+					//r.drawPoint(0, 0, red, g, b, a)
 				}
 			}
 		}
+
+		/*
+			r.drawLine(t.X1, t.Y1, t.X2, t.Y2, 0, 0, 0, 255)
+			r.drawLine(t.X2, t.Y2, t.X3, t.Y3, 0, 0, 0, 255)
+			r.drawLine(t.X3, t.Y3, t.X1, t.Y1, 0, 0, 0, 255)
+		*/
 	}
 
 	outlineRed, outlineG, outlineB, outlineA := parseColor(s.Stroke)
 	for i := 0; i < len(points); i += 2 {
 		p1X, p1Y := points[i], points[i+1]
 		p2X, p2Y := points[(i+2)%len(points)], points[(i+3)%len(points)]
-		r.drawLine(p1X, p1Y, p2X, p2Y, outlineRed, outlineG, outlineB, outlineA)
+		//r.drawLine(p1X, p1Y, p2X, p2Y, outlineRed, outlineG, outlineB, outlineA)
+		r.drawXialin(p1X, p1Y, p2X, p2Y, outlineRed, outlineG, outlineB, outlineA)
 	}
 
-	/*
-	  c = polygon.style.strokeColor;
-	  if( c.a != 0 ) {
-	    int nPoints = polygon.points.size();
-	    for( int i = 0; i < nPoints; i++ ) {
-	      Vector2D p0 = transform(polygon.points[(i+0) % nPoints]);
-	      Vector2D p1 = transform(polygon.points[(i+1) % nPoints]);
-	      rasterize_line( p0.x, p0.y, p1.x, p1.y, c );
-	    }
-	  }
-	*/
 }
 
 func (s *Polygon) flatTriangleApproach(r *rasterizer) {
@@ -488,6 +487,11 @@ func (s *Polygon) flatTriangleApproach(r *rasterizer) {
 		r.drawFlatBottomTriangle(t.X1, t.Y1, t.X2, t.Y2, x4, y4, red, g, b, a)
 		r.drawFlatTopTriangle(t.X2, t.Y2, x4, y4, t.X3, t.Y3, red, g, b, a)
 
+		/*
+			r.drawLine(t.X1, t.Y1, t.X2, t.Y2, 0, 0, 0, 255)
+			r.drawLine(t.X2, t.Y2, t.X3, t.Y3, 0, 0, 0, 255)
+			r.drawLine(t.X3, t.Y3, t.X1, t.Y1, 0, 0, 0, 255)
+		*/
 	}
 }
 
@@ -693,4 +697,81 @@ func main() {
 	*/
 
 	<-make(chan bool) // Prevent program from exiting
+}
+
+func round(x float32) float32 {
+	return float32(int(x + 0.5))
+}
+
+func fpart(x float32) float32 {
+	return x - float32(int(x))
+}
+
+func rfpart(x float32) float32 {
+	return 1.0 - fpart(x)
+}
+
+// https://en.wikipedia.org/wiki/Xiaolin_Wu's_line_algorithm
+func (r *rasterizer) drawXialin(x0, y0, x1, y1 float32, red, g, b, a byte) {
+	steep := math.Abs(float64(y1-y0)) > math.Abs(float64(x1-x0))
+	if steep {
+		x0, y0 = y0, x0
+		x1, y1 = y1, x1
+	}
+
+	if x0 > x1 {
+		x0, x1 = x1, x0
+		y0, y1 = y1, y0
+	}
+
+	dx := x1 - x0
+	dy := y1 - y0
+	gradient := dy / dx
+
+	// Handle first endpoint
+	xend := round(x0)
+	yend := y0 + gradient*(xend-x0)
+	xgap := rfpart(x0 + 0.5)
+	xpxl1 := xend // This will be used in the main loop
+	ypxl1 := float32(int(yend))
+	if steep {
+		r.drawPoint(ypxl1, xpxl1, red, g, b, a)   // TODO color
+		r.drawPoint(ypxl1+1, xpxl1, red, g, b, a) // TODO color
+	} else {
+		r.drawPoint(xpxl1, ypxl1, red, g, b, a)   // TODO color
+		r.drawPoint(xpxl1, ypxl1+1, red, g, b, a) // TODO color
+	}
+	intery := yend + gradient // first y-intersection for the main loop
+
+	// Handle second endpoint
+	xend = round(x1)
+	yend = y1 + gradient*(xend-x1)
+	xgap = fpart(x1 + 0.5)
+	xpxl2 := xend // This will be used in the main loop
+	ypxl2 := float32(int(yend))
+	if steep {
+		r.drawPoint(ypxl2, xpxl2, red, g, b, a)   // TODO color
+		r.drawPoint(ypxl2+1, xpxl2, red, g, b, a) // TODO color
+	} else {
+		r.drawPoint(xpxl2, ypxl2, red, g, b, a)   // TODO color
+		r.drawPoint(xpxl2, ypxl2+1, red, g, b, a) // TODO color
+	}
+
+	_ = xgap
+	_ = intery
+
+	// Main loop
+	if steep {
+		for x := xpxl1 + 1; x <= xpxl2-1; x++ {
+			r.drawPoint(intery, x, red, g, b, a)   // TODO color
+			r.drawPoint(intery+1, x, red, g, b, a) // TODO color
+			intery = intery + gradient
+		}
+	} else {
+		for x := xpxl1 + 1; x <= xpxl2-1; x++ {
+			r.drawPoint(x, intery, red, g, b, a)   // TODO color
+			r.drawPoint(x, intery+1, red, g, b, a) // TODO color
+			intery = intery + gradient
+		}
+	}
 }
