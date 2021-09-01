@@ -17,6 +17,13 @@ import (
 	"github.com/nicholasblaskey/svg-rasterizer/board"
 )
 
+type Color struct {
+	r byte
+	g byte
+	b byte
+	a byte
+}
+
 type vec2 struct {
 	x float32
 	y float32
@@ -187,7 +194,11 @@ func crossProduct(x1, y1, x2, y2 float32) float32 {
 	return x1*y2 - y1*x2
 }
 
-func parseColor(col string) (byte, byte, byte, byte) {
+func parseColor(col string) Color {
+	if len(col) == 0 {
+		return Color{0, 0, 0, 0}
+	}
+
 	if len(col) == 6 { // Add in # if missing
 		col = "#" + col
 	}
@@ -197,7 +208,7 @@ func parseColor(col string) (byte, byte, byte, byte) {
 	b, _ := strconv.ParseInt(col[5:7], 16, 9)
 	a := 255
 
-	return byte(r), byte(g), byte(b), byte(a)
+	return Color{byte(r), byte(g), byte(b), byte(a)}
 }
 
 type rasterizer struct {
@@ -232,11 +243,11 @@ type Rect struct {
 }
 
 func (s *Rect) rasterize(r *rasterizer) {
-	red, g, b, a := parseColor(s.Fill)
-	r.drawPoint(s.X, s.Y, red, g, b, a)
+	col := parseColor(s.Fill)
+	r.drawPoint(s.X, s.Y, col)
 }
 
-func (r *rasterizer) drawPoint(x, y float32, red, g, b, a byte) {
+func (r *rasterizer) drawPoint(x, y float32, col Color) {
 	// TODO is this width and height divide right?
 	xCoord := int(x * float32(r.widthPixels) / r.width)
 	yCoord := r.heightPixels - int(y*float32(r.heightPixels)/r.height)
@@ -252,10 +263,10 @@ func (r *rasterizer) drawPoint(x, y float32, red, g, b, a byte) {
 		return
 	}
 
-	r.pixels[(xCoord+yCoord*r.widthPixels)*4] = red
-	r.pixels[(xCoord+yCoord*r.widthPixels)*4+1] = g
-	r.pixels[(xCoord+yCoord*r.widthPixels)*4+2] = b
-	r.pixels[(xCoord+yCoord*r.widthPixels)*4+3] = a
+	r.pixels[(xCoord+yCoord*r.widthPixels)*4] = col.r
+	r.pixels[(xCoord+yCoord*r.widthPixels)*4+1] = col.g
+	r.pixels[(xCoord+yCoord*r.widthPixels)*4+2] = col.b
+	r.pixels[(xCoord+yCoord*r.widthPixels)*4+3] = col.a
 }
 
 type Line struct {
@@ -267,32 +278,32 @@ type Line struct {
 }
 
 func (s *Line) rasterize(r *rasterizer) {
-	red, g, b, a := parseColor(s.Fill)
-	r.drawLine(s.X1, s.Y1, s.X2, s.Y2, red, g, b, a)
+	col := parseColor(s.Fill)
+	r.drawLine(s.X1, s.Y1, s.X2, s.Y2, col)
 }
 
-func (r *rasterizer) drawLine(x1, y1, x2, y2 float32, red, g, b, a byte) {
+func (r *rasterizer) drawLine(x1, y1, x2, y2 float32, col Color) {
 	slope := (y2 - y1) / (x2 - x1)
 
 	// Slope greater than one case
 	if math.Abs(float64(slope)) > 1.0 {
 		if y1 < y2 {
-			r.bresenham(y1, x1, y2, 1.0/slope, red, g, b, a, true)
+			r.bresenham(y1, x1, y2, 1.0/slope, col, true)
 		} else { // Flip and y1 and y2
-			r.bresenham(y2, x2, y1, 1.0/slope, red, g, b, a, true)
+			r.bresenham(y2, x2, y1, 1.0/slope, col, true)
 		}
 		return
 	}
 
 	// Slope less than one case
 	if x1 < x2 {
-		r.bresenham(x1, y1, x2, slope, red, g, b, a, false)
+		r.bresenham(x1, y1, x2, slope, col, false)
 	} else { // Flip and x1 and x2
-		r.bresenham(x2, y2, x1, slope, red, g, b, a, false)
+		r.bresenham(x2, y2, x1, slope, col, false)
 	}
 }
 
-func (r *rasterizer) bresenham(x1, y1, x2, slope float32, red, g, b, a byte, flipped bool) {
+func (r *rasterizer) bresenham(x1, y1, x2, slope float32, col Color, flipped bool) {
 	direction := float32(1.0)
 	if slope < 0 {
 		direction = -1.0
@@ -302,9 +313,9 @@ func (r *rasterizer) bresenham(x1, y1, x2, slope float32, red, g, b, a byte, fli
 	y := y1
 	for x := x1; x < x2; x++ {
 		if flipped {
-			r.drawPoint(y, x, red, g, b, a)
+			r.drawPoint(y, x, col)
 		} else {
-			r.drawPoint(x, y, red, g, b, a)
+			r.drawPoint(x, y, col)
 		}
 
 		if (slope >= 0 && epsilon+slope < 0.5) || (slope < 0 && epsilon+slope > -0.5) {
@@ -413,7 +424,7 @@ func (s *Polygon) boundingBoxApproach(r *rasterizer) {
 	triangles, points := pointsToTriangles(s.Points, s.transformMatrix)
 
 	// Draw each triangle
-	red, g, b, a := parseColor(s.Fill)
+	col := parseColor(s.Fill)
 	for _, t := range triangles {
 		minX := minOfThree(t.X1, t.X2, t.X3)
 		maxX := maxOfThree(t.X1, t.X2, t.X3)
@@ -434,7 +445,7 @@ func (s *Polygon) boundingBoxApproach(r *rasterizer) {
 				t := crossProduct(vsX1, vsY1, qx, qy) / crossProduct(vsX1, vsY1, vsX2, vsY2)
 
 				if s >= 0 && t >= 0 && s+t <= 1 {
-					r.drawPoint(x, y, red, g, b, a)
+					r.drawPoint(x, y, col)
 					//r.drawPoint(0, 0, red, g, b, a)
 				}
 			}
@@ -447,12 +458,14 @@ func (s *Polygon) boundingBoxApproach(r *rasterizer) {
 		*/
 	}
 
-	outlineRed, outlineG, outlineB, outlineA := parseColor(s.Stroke)
+	if s.Stroke == "" {
+		return
+	}
+	outlineCol := parseColor(s.Stroke)
 	for i := 0; i < len(points); i += 2 {
 		p1X, p1Y := points[i], points[i+1]
 		p2X, p2Y := points[(i+2)%len(points)], points[(i+3)%len(points)]
-		//r.drawLine(p1X, p1Y, p2X, p2Y, outlineRed, outlineG, outlineB, outlineA)
-		r.drawXialin(p1X, p1Y, p2X, p2Y, outlineRed, outlineG, outlineB, outlineA)
+		r.drawXialin(p1X, p1Y, p2X, p2Y, outlineCol)
 	}
 
 }
@@ -469,14 +482,14 @@ func (s *Polygon) flatTriangleApproach(r *rasterizer) {
 			r.drawLine(t.X1, t.Y1, t.X3, t.Y3, red, g, b, a)
 		*/
 
-		red, g, b, a := parseColor(s.Fill)
+		col := parseColor(s.Fill)
 
 		// http://www.sunshine2k.de/coding/java/TriangleRasterization/TriangleRasterization.html
 		if t.Y2 == t.Y3 { // Only flat bottom triangle
-			r.drawFlatBottomTriangle(t.X1, t.Y1, t.X2, t.Y2, t.X3, t.Y3, red, g, b, a)
+			r.drawFlatBottomTriangle(t.X1, t.Y1, t.X2, t.Y2, t.X3, t.Y3, col)
 			return
 		} else if t.Y1 == t.Y2 { // Only flat top triangle
-			r.drawFlatTopTriangle(t.X1, t.Y1, t.X2, t.Y2, t.X3, t.Y3, red, g, b, a)
+			r.drawFlatTopTriangle(t.X1, t.Y1, t.X2, t.Y2, t.X3, t.Y3, col)
 			return
 		}
 
@@ -484,8 +497,8 @@ func (s *Polygon) flatTriangleApproach(r *rasterizer) {
 		x4 := t.X1 + (t.Y2-t.Y1)/(t.Y3-t.Y1)*(t.X3-t.X1)
 		y4 := t.Y2
 
-		r.drawFlatBottomTriangle(t.X1, t.Y1, t.X2, t.Y2, x4, y4, red, g, b, a)
-		r.drawFlatTopTriangle(t.X2, t.Y2, x4, y4, t.X3, t.Y3, red, g, b, a)
+		r.drawFlatBottomTriangle(t.X1, t.Y1, t.X2, t.Y2, x4, y4, col)
+		r.drawFlatTopTriangle(t.X2, t.Y2, x4, y4, t.X3, t.Y3, col)
 
 		/*
 			r.drawLine(t.X1, t.Y1, t.X2, t.Y2, 0, 0, 0, 255)
@@ -495,25 +508,25 @@ func (s *Polygon) flatTriangleApproach(r *rasterizer) {
 	}
 }
 
-func (r *rasterizer) drawFlatBottomTriangle(x1, y1, x2, y2, x3, y3 float32, red, g, b, a byte) {
+func (r *rasterizer) drawFlatBottomTriangle(x1, y1, x2, y2, x3, y3 float32, col Color) {
 	invSlope1 := (x2 - x1) / (y2 - y1)
 	invSlope2 := (x3 - x1) / (y3 - y1)
 	curX1, curX2 := x1, x1
 	for scanLineY := y1; scanLineY <= y2; scanLineY++ {
-		r.drawLine(curX1, scanLineY, curX2, scanLineY, red, g, b, a)
+		r.drawLine(curX1, scanLineY, curX2, scanLineY, col)
 
 		curX1 += invSlope1
 		curX2 += invSlope2
 	}
 }
 
-func (r *rasterizer) drawFlatTopTriangle(x1, y1, x2, y2, x3, y3 float32, red, g, b, a byte) {
+func (r *rasterizer) drawFlatTopTriangle(x1, y1, x2, y2, x3, y3 float32, col Color) {
 	invSlope1 := (x3 - x1) / (y3 - y1)
 	invSlope2 := (x3 - x2) / (y3 - y2)
 	curX1, curX2 := x3, x3
 
 	for scanLineY := y3; scanLineY > y1; scanLineY-- {
-		r.drawLine(curX1, scanLineY, curX2, scanLineY, red, g, b, a)
+		r.drawLine(curX1, scanLineY, curX2, scanLineY, col)
 
 		curX1 -= invSlope1
 		curX2 -= invSlope2
@@ -644,9 +657,9 @@ func main() {
 	//r, err := New(canvas, "/svg/test1.svg")
 	//r, err := New(canvas, "/svg/test2.svg")
 	//r, err := New(canvas, "/svg/test3.svg")
-	//r, err := New(canvas, "/svg/test4.svg")
+	r, err := New(canvas, "/svg/test4.svg")
 	//r, err := New(canvas, "/svg/test5.svg")
-	r, err := New(canvas, "/svg/test6.svg")
+	//r, err := New(canvas, "/svg/test6.svg")
 
 	if err != nil {
 		panic(err)
@@ -712,7 +725,7 @@ func rfpart(x float32) float32 {
 }
 
 // https://en.wikipedia.org/wiki/Xiaolin_Wu's_line_algorithm
-func (r *rasterizer) drawXialin(x0, y0, x1, y1 float32, red, g, b, a byte) {
+func (r *rasterizer) drawXialin(x0, y0, x1, y1 float32, col Color) {
 	steep := math.Abs(float64(y1-y0)) > math.Abs(float64(x1-x0))
 	if steep {
 		x0, y0 = y0, x0
@@ -735,11 +748,11 @@ func (r *rasterizer) drawXialin(x0, y0, x1, y1 float32, red, g, b, a byte) {
 	xpxl1 := xend // This will be used in the main loop
 	ypxl1 := float32(int(yend))
 	if steep {
-		r.drawPoint(ypxl1, xpxl1, red, g, b, a)   // TODO color
-		r.drawPoint(ypxl1+1, xpxl1, red, g, b, a) // TODO color
+		r.drawPoint(ypxl1, xpxl1, col)
+		r.drawPoint(ypxl1+1, xpxl1, col)
 	} else {
-		r.drawPoint(xpxl1, ypxl1, red, g, b, a)   // TODO color
-		r.drawPoint(xpxl1, ypxl1+1, red, g, b, a) // TODO color
+		r.drawPoint(xpxl1, ypxl1, col)
+		r.drawPoint(xpxl1, ypxl1+1, col)
 	}
 	intery := yend + gradient // first y-intersection for the main loop
 
@@ -750,11 +763,11 @@ func (r *rasterizer) drawXialin(x0, y0, x1, y1 float32, red, g, b, a byte) {
 	xpxl2 := xend // This will be used in the main loop
 	ypxl2 := float32(int(yend))
 	if steep {
-		r.drawPoint(ypxl2, xpxl2, red, g, b, a)   // TODO color
-		r.drawPoint(ypxl2+1, xpxl2, red, g, b, a) // TODO color
+		r.drawPoint(ypxl2, xpxl2, col)
+		r.drawPoint(ypxl2+1, xpxl2, col)
 	} else {
-		r.drawPoint(xpxl2, ypxl2, red, g, b, a)   // TODO color
-		r.drawPoint(xpxl2, ypxl2+1, red, g, b, a) // TODO color
+		r.drawPoint(xpxl2, ypxl2, col)
+		r.drawPoint(xpxl2, ypxl2+1, col)
 	}
 
 	_ = xgap
@@ -763,14 +776,14 @@ func (r *rasterizer) drawXialin(x0, y0, x1, y1 float32, red, g, b, a byte) {
 	// Main loop
 	if steep {
 		for x := xpxl1 + 1; x <= xpxl2-1; x++ {
-			r.drawPoint(intery, x, red, g, b, a)   // TODO color
-			r.drawPoint(intery+1, x, red, g, b, a) // TODO color
+			r.drawPoint(intery, x, col)
+			r.drawPoint(intery+1, x, col)
 			intery = intery + gradient
 		}
 	} else {
 		for x := xpxl1 + 1; x <= xpxl2-1; x++ {
-			r.drawPoint(x, intery, red, g, b, a)   // TODO color
-			r.drawPoint(x, intery+1, red, g, b, a) // TODO color
+			r.drawPoint(x, intery, col)
+			r.drawPoint(x, intery+1, col)
 			intery = intery + gradient
 		}
 	}
