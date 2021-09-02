@@ -286,6 +286,7 @@ func (r *rasterizer) drawPoint(x, y float32, col Color) {
 		xCoord, yCoord := int(x), r.heightPixels-int(y)
 	*/
 
+	//fmt.Println(yCoord, r.widthPixels)
 	if xCoord < 0 || xCoord >= r.widthPixels ||
 		yCoord < 0 || yCoord >= r.heightPixels {
 		return
@@ -406,7 +407,10 @@ func (r *rasterizer) transform(points []float32, trans mgl.Mat3) []float32 {
 		transformed := trans.Mul3x1(xyz)
 		points[i] = transformed[0]
 		points[i+1] = transformed[1]
+
 	}
+
+	fmt.Println(points)
 	return points
 }
 
@@ -602,9 +606,11 @@ func New(canvas js.Value, filePath string) (*rasterizer, error) {
 	r.width = float32(width)
 	r.height = float32(height)
 
+	r.sampleRate = 2
+
 	// Create board.
-	canvas.Set("width", r.widthPixels)
-	canvas.Set("height", r.heightPixels)
+	canvas.Set("width", r.widthPixels*r.sampleRate)   // CHANGE
+	canvas.Set("height", r.heightPixels*r.sampleRate) // CHANGE
 	b, err := board.New(canvas)
 	if err != nil {
 		panic(err)
@@ -621,14 +627,14 @@ func New(canvas js.Value, filePath string) (*rasterizer, error) {
 		}))
 	r.board = b
 
-	r.sampleRate = 2
-
 	return r, nil
 }
 
 func (r *rasterizer) Draw() {
 	r.widthPixels *= r.sampleRate
 	r.heightPixels *= r.sampleRate
+	r.width *= float32(r.sampleRate)
+	r.height *= float32(r.sampleRate)
 	r.pixels = make([]byte, 4*r.widthPixels*r.heightPixels)
 
 	fmt.Println(len(r.pixels))
@@ -696,9 +702,9 @@ func main() {
 	//r, err := New(canvas, "/svg/test1.svg")
 	//r, err := New(canvas, "/svg/test2.svg")
 	//r, err := New(canvas, "/svg/test3.svg")
-	//r, err := New(canvas, "/svg/test4.svg")
+	r, err := New(canvas, "/svg/test4.svg")
 	//r, err := New(canvas, "/svg/test5.svg")
-	r, err := New(canvas, "/svg/test6.svg")
+	//r, err := New(canvas, "/svg/test6.svg")
 
 	if err != nil {
 		panic(err)
