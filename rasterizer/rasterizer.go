@@ -245,6 +245,8 @@ type rasterizer struct {
 	heightPixels int
 	width        float32
 	height       float32
+	sampleRate   int
+	samplePixels int
 }
 
 type Svg struct {
@@ -397,9 +399,10 @@ func parseTransform(trans string) mgl.Mat3 {
 	return mgl.Ident3()
 }
 
-func transform(points []float32, trans mgl.Mat3) []float32 {
+func (r *rasterizer) transform(points []float32, trans mgl.Mat3) []float32 {
 	for i := 0; i < len(points); i += 2 {
-		xyz := mgl.Vec3{points[i], points[i+1], 1.0}
+		xyz := mgl.Vec3{points[i] * float32(r.sampleRate),
+			points[i+1] * float32(r.sampleRate), 1.0}
 		transformed := trans.Mul3x1(xyz)
 		points[i] = transformed[0]
 		points[i+1] = transformed[1]
@@ -407,7 +410,7 @@ func transform(points []float32, trans mgl.Mat3) []float32 {
 	return points
 }
 
-func pointsToTriangles(in string, transformation mgl.Mat3) ([]*Triangle, []float32) {
+func (r *rasterizer) pointsToTriangles(in string, transformation mgl.Mat3) ([]*Triangle, []float32) {
 	points := strings.Split(strings.Trim(in, " "), " ")
 
 	pointsFloat := []float32{}
@@ -424,7 +427,7 @@ func pointsToTriangles(in string, transformation mgl.Mat3) ([]*Triangle, []float
 		pointsFloat = append(pointsFloat, float32(x), float32(y))
 	}
 
-	pointsFloat = transform(pointsFloat, transformation)
+	pointsFloat = r.transform(pointsFloat, transformation)
 
 	triangles := triangulate(pointsFloat)
 	for _, t := range triangles {
@@ -449,7 +452,7 @@ func (s *Polygon) rasterize(r *rasterizer) {
 }
 
 func (s *Polygon) boundingBoxApproach(r *rasterizer) {
-	triangles, points := pointsToTriangles(s.Points, s.transformMatrix)
+	triangles, points := r.pointsToTriangles(s.Points, s.transformMatrix)
 
 	// Draw each triangle
 	col := parseColor(s.Fill)
@@ -499,7 +502,7 @@ func (s *Polygon) boundingBoxApproach(r *rasterizer) {
 }
 
 func (s *Polygon) flatTriangleApproach(r *rasterizer) {
-	triangles, _ := pointsToTriangles(s.Points, s.transformMatrix)
+	triangles, _ := r.pointsToTriangles(s.Points, s.transformMatrix)
 
 	// TODO for loop these triangles when we start doing filling and polygons
 	for _, t := range triangles {
@@ -616,15 +619,19 @@ func New(canvas js.Value, filePath string) (*rasterizer, error) {
 			}
 			return nil
 		}))
-
 	r.board = b
+
+	r.sampleRate = 2
 
 	return r, nil
 }
 
 func (r *rasterizer) Draw() {
+	r.widthPixels *= r.sampleRate
+	r.heightPixels *= r.sampleRate
 	r.pixels = make([]byte, 4*r.widthPixels*r.heightPixels)
 
+	fmt.Println(len(r.pixels))
 	for i := 0; i < len(r.pixels); i++ {
 		r.pixels[i] = 255
 	}
@@ -632,6 +639,10 @@ func (r *rasterizer) Draw() {
 	r.svg.transformMatrix = parseTransform(r.svg.Transform) // Can an SVG element have a transform??
 
 	r.svg.rasterize(r)
+
+	if r.sampleRate > 1 { // Resolve buffer
+
+	}
 	r.board.SetPixels(r.pixels)
 }
 
@@ -717,6 +728,9 @@ func rfpart(x float32) float32 {
 	return 1.0 - fpart(x)
 }
 
+// Uses a single strain of Xiaolin since it seems to give the best results.
+// The two strains makes the colors look odd however revisit this after antialiasing.
+// Not sure if the resolution is just too low.
 func (r *rasterizer) drawLine(x0, y0, x1, y1 float32, col Color) {
 	steep := math.Abs(float64(y1-y0)) > math.Abs(float64(x1-x0))
 	if steep {
