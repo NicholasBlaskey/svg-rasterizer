@@ -606,11 +606,9 @@ func New(canvas js.Value, filePath string) (*rasterizer, error) {
 	r.width = float32(width)
 	r.height = float32(height)
 
-	r.sampleRate = 2
-
 	// Create board.
-	canvas.Set("width", r.widthPixels*r.sampleRate)   // CHANGE
-	canvas.Set("height", r.heightPixels*r.sampleRate) // CHANGE
+	canvas.Set("width", r.widthPixels)
+	canvas.Set("height", r.heightPixels)
 	b, err := board.New(canvas)
 	if err != nil {
 		panic(err)
@@ -626,6 +624,8 @@ func New(canvas js.Value, filePath string) (*rasterizer, error) {
 			return nil
 		}))
 	r.board = b
+
+	r.sampleRate = 2
 
 	return r, nil
 }
@@ -647,8 +647,34 @@ func (r *rasterizer) Draw() {
 	r.svg.rasterize(r)
 
 	if r.sampleRate > 1 { // Resolve buffer
+		upscaled := r.pixels
+		r.pixels = make([]byte, 4*r.widthPixels/r.sampleRate*r.heightPixels/r.sampleRate)
 
+		// TODO case for n > 2
+		for i := 0; i < len(r.pixels)/4; i++ {
+			// 0, 1, 2, 3, 4, 5, 6, 7, 8
+			//r.pixels[i] = upscaled[i*r.sampleRate] + upscaled[i*r.sampleRate+1] +
+			//	upscaled[i*r.sampleRate+r.widthPixels/r.sampleRate] +
+			//	upscaled[i*r.sampleRate+r.widthPixels/r.sampleRate]
+			// TODO the issue is we need to advance two rows down each time,
+			// make a helper function that does x,y and this since it is a little confusing now
+			left := i * 4
+			right := i*4 + 4
+			botLeft := i*4 + r.widthPixels/r.sampleRate
+			botRight := i*4 + 4 + r.widthPixels/r.sampleRate
+
+			r.pixels[i*4] = (upscaled[left] + upscaled[right] +
+				upscaled[botLeft] + upscaled[botRight]) / 4
+			r.pixels[i*4+1] = (upscaled[left+1] + upscaled[right+1] +
+				upscaled[botLeft+1] + upscaled[botRight+1]) / 4
+			r.pixels[i*4+2] = (upscaled[left+2] + upscaled[right+2] +
+				upscaled[botLeft+2] + upscaled[botRight+2]) / 4
+			r.pixels[i*4+3] = (upscaled[left+3] + upscaled[right+3] +
+				upscaled[botLeft+3] + upscaled[botRight+3]) / 4
+
+		}
 	}
+	fmt.Println(len(r.pixels))
 	r.board.SetPixels(r.pixels)
 }
 
