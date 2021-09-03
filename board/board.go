@@ -6,8 +6,6 @@ import (
 
 	mgl "github.com/go-gl/mathgl/mgl32"
 	"github.com/nicholasblaskey/webgl-utils/util"
-
-	"fmt"
 )
 
 type Board struct {
@@ -50,7 +48,7 @@ func New(canvas js.Value) (*Board, error) {
 	b := &Board{gl: gl, canvas: canvas, ZoomFactor: 0.05, TranslationSpeed: 0.003,
 		numSquares: 15,
 		//Width:      12, Height: 12,
-		Width: canvas.Get("height").Int(), Height: canvas.Get("width").Int(),
+		Width: canvas.Get("width").Int(), Height: canvas.Get("height").Int(),
 	}
 
 	err = b.initShaders()
@@ -84,7 +82,6 @@ func (b *Board) EnablePixelInspector(shouldTurnOn bool) {
 
 func (b *Board) initPixelInspector() {
 	// Always have the pixel inspector on and listening
-	fmt.Println(b.Width, b.Height, "TEXELSIZE")
 	texelSizeX := 1.0 / float32(b.Width)
 	texelSizeY := 1.0 / float32(b.Height)
 	b.canvas.Call("addEventListener", "mousemove",
@@ -96,8 +93,6 @@ func (b *Board) initPixelInspector() {
 			// not on the edge of a pixel.
 			b.mouseX = (x*texelSizeX + texelSizeX/2 - 0.5) * 2.0
 			b.mouseY = (1.0 - y*texelSizeY + texelSizeY/2 - 0.5) * 2.0
-
-			fmt.Println(b.mouseX, b.mouseY, x, y, b.Width, b.Height)
 
 			if b.pixelInspectorOn {
 				b.draw()
