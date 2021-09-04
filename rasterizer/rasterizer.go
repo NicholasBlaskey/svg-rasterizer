@@ -496,19 +496,21 @@ func (r *rasterizer) Draw() {
 			return (x + r.widthPixels/2*y) * 4
 		}
 
-		for x := 0; x < r.widthPixels; x += 4 {
-			for y := 0; y < r.heightPixels; y += 4 {
-				xPixel := x / 2 / 4
-				yPixel := y / 2 / 4
-				r.pixels[getIndexPixels(xPixel, yPixel)] = upscaled[getIndex(x, y)] / byte(r.sampleRate)
-				r.pixels[getIndexPixels(xPixel, yPixel)+1] = upscaled[getIndex(x, y)+1] / byte(r.sampleRate)
-				r.pixels[getIndexPixels(xPixel, yPixel)+2] = upscaled[getIndex(x, y)+2] / byte(r.sampleRate)
-				r.pixels[getIndexPixels(xPixel, yPixel)+3] = upscaled[getIndex(x, y)+3] / byte(r.sampleRate)
+		for x := 0; x < r.widthPixels; x++ {
+			for y := 0; y < r.heightPixels; y++ {
+				i := getIndexPixels(x/2, y/2)
+				j := getIndex(x, y)
+				r.pixels[i] = upscaled[j] / byte(r.sampleRate) * 2
+				r.pixels[i+1] = upscaled[j+1] / byte(r.sampleRate) * 2
+				r.pixels[i+2] = upscaled[j+2] / byte(r.sampleRate) * 2
+				r.pixels[i+3] = upscaled[j+3] / byte(r.sampleRate) * 2
 			}
 		}
 
 	}
+
 	fmt.Println(len(r.pixels))
+	fmt.Println(r.pixels[:1000])
 	r.board.SetPixels(r.pixels)
 }
 
