@@ -60,15 +60,21 @@ func parseColor(col string) Color {
 }
 
 type rasterizer struct {
-	board        *board.Board
-	svg          *Svg
-	pixels       []byte
-	widthPixels  int
-	heightPixels int
-	width        float32
-	height       float32
-	sampleRate   int
-	samplePixels int
+	board               *board.Board
+	svg                 *Svg
+	pixels              []byte
+	widthPixels         int
+	heightPixels        int
+	width               float32
+	height              float32
+	sampleRate          int
+	samplePixels        int
+	origWidthPixels     int
+	origHeightPixels    int
+	origWidth           float32
+	origHeight          float32
+	pointsToFill        []int
+	colorOfPointsToFill []Color
 }
 
 type Svg struct {
@@ -94,21 +100,15 @@ type Rect struct {
 
 func (s *Rect) rasterize(r *rasterizer) {
 	col := parseColor(s.Fill)
-	r.drawPoint(s.X, s.Y, col)
+	r.drawPixel(s.X, s.Y, col)
 }
 
+// This draws a point which will then be anti aliased.
 func (r *rasterizer) drawPoint(x, y float32, col Color) {
 	// TODO is this width and height divide right?
 	xCoord := int(x * float32(r.widthPixels) / r.width)
 	yCoord := r.heightPixels - int(y*float32(r.heightPixels)/r.height)
-	/*
-		x, y = x*float32(r.widthPixels)/r.width, y*float32(r.heightPixels)/r.height
-		x = float32(math.Round(float64(x)))
-		y = float32(math.Round(float64(y)))
-		xCoord, yCoord := int(x), r.heightPixels-int(y)
-	*/
 
-	//fmt.Println(yCoord, r.widthPixels)
 	if xCoord < 0 || xCoord >= r.widthPixels ||
 		yCoord < 0 || yCoord >= r.heightPixels {
 		return
@@ -118,6 +118,21 @@ func (r *rasterizer) drawPoint(x, y float32, col Color) {
 	r.pixels[(xCoord+yCoord*r.widthPixels)*4+1] = byte(col.g * 255.0)
 	r.pixels[(xCoord+yCoord*r.widthPixels)*4+2] = byte(col.b * 255.0)
 	r.pixels[(xCoord+yCoord*r.widthPixels)*4+3] = byte(col.a * 255.0)
+}
+
+// This draws a pixel which will be drawn into the final buffer after everything else
+// has been resolved.
+func (r *rasterizer) drawPixel(x, y float32, col Color) {
+	xCoord := int(x * float32(r.origWidthPixels) / r.origWidth)
+	yCoord := r.origHeightPixels - int(y*float32(r.origHeightPixels)/r.origHeight)
+
+	if xCoord < 0 || xCoord >= r.origWidthPixels ||
+		yCoord < 0 || yCoord >= r.origHeightPixels {
+		return
+	}
+
+	r.pointsToFill = append(r.pointsToFill, (xCoord+yCoord*r.origWidthPixels)*4)
+	r.colorOfPointsToFill = append(r.colorOfPointsToFill, col)
 }
 
 type Line struct {
@@ -153,7 +168,6 @@ func parseTransform(trans string) mgl.Mat3 {
 				panic(err)
 			}
 			points = append(points, float32(x))
-			//mat[i] = float32(x)
 		}
 
 		mat := mgl.Ident3()
@@ -168,12 +182,10 @@ func parseTransform(trans string) mgl.Mat3 {
 
 func (r *rasterizer) transform(points []float32, trans mgl.Mat3) []float32 {
 	for i := 0; i < len(points); i += 2 {
-		xyz := mgl.Vec3{points[i],
-			points[i+1], 1.0}
+		xyz := mgl.Vec3{points[i], points[i+1], 1.0}
 		transformed := trans.Mul3x1(xyz)
 		points[i] = transformed[0] * float32(r.sampleRate)
 		points[i+1] = transformed[1] * float32(r.sampleRate)
-
 	}
 
 	return points
@@ -259,6 +271,7 @@ func (s *Polygon) boundingBoxApproach(r *rasterizer) {
 		*/
 	}
 
+	// Draw the outline if it exists.
 	if s.Stroke == "" {
 		return
 	}
@@ -266,7 +279,8 @@ func (s *Polygon) boundingBoxApproach(r *rasterizer) {
 	for i := 0; i < len(points); i += 2 {
 		p1X, p1Y := points[i], points[i+1]
 		p2X, p2Y := points[(i+2)%len(points)], points[(i+3)%len(points)]
-		r.drawLine(p1X, p1Y, p2X, p2Y, outlineCol)
+		r.drawLine(p1X/float32(r.sampleRate), p1Y/float32(r.sampleRate),
+			p2X/float32(r.sampleRate), p2Y/float32(r.sampleRate), outlineCol)
 	}
 
 }
@@ -320,7 +334,7 @@ func New(canvas js.Value, filePath string) (*rasterizer, error) {
 		}))
 	r.board = b
 
-	r.sampleRate = 4
+	r.sampleRate = 2
 
 	return r, nil
 }
@@ -352,6 +366,9 @@ func (r *rasterizer) resolveBuffer() {
 }
 
 func (r *rasterizer) Draw() {
+	r.origWidthPixels, r.origHeightPixels = r.widthPixels, r.heightPixels
+	r.origWidth, r.origHeight = r.width, r.height
+
 	r.widthPixels *= r.sampleRate
 	r.heightPixels *= r.sampleRate
 	r.width *= float32(r.sampleRate)
@@ -370,7 +387,18 @@ func (r *rasterizer) Draw() {
 		r.resolveBuffer()
 	}
 
+	// Fill points/lines that we aren't antialiaisng on.
+	for i, point := range r.pointsToFill {
+		r.pixels[point] = byte(r.colorOfPointsToFill[i].r * 255.0)
+		r.pixels[point+1] = byte(r.colorOfPointsToFill[i].g * 255.0)
+		r.pixels[point+2] = byte(r.colorOfPointsToFill[i].b * 255.0)
+		r.pixels[point+3] = byte(r.colorOfPointsToFill[i].a * 255.0)
+	}
+
 	r.board.SetPixels(r.pixels)
+
+	r.widthPixels, r.heightPixels = r.origWidthPixels, r.origHeightPixels
+	r.width, r.height = r.origWidth, r.origHeight
 }
 
 func (s *Svg) rasterize(r *rasterizer) {
@@ -483,9 +511,9 @@ func (r *rasterizer) drawLine(x0, y0, x1, y1 float32, col Color) {
 	xpxl1 := xend // This will be used in the main loop
 	ypxl1 := float32(int(yend))
 	if steep {
-		r.drawPoint(ypxl1, xpxl1, col)
+		r.drawPixel(ypxl1, xpxl1, col)
 	} else {
-		r.drawPoint(xpxl1, ypxl1, col)
+		r.drawPixel(xpxl1, ypxl1, col)
 	}
 	intery := yend + gradient // first y-intersection for the main loop
 
@@ -495,20 +523,20 @@ func (r *rasterizer) drawLine(x0, y0, x1, y1 float32, col Color) {
 	xpxl2 := xend // This will be used in the main loop
 	ypxl2 := float32(int(yend))
 	if steep {
-		r.drawPoint(ypxl2, xpxl2, col)
+		r.drawPixel(ypxl2, xpxl2, col)
 	} else {
-		r.drawPoint(xpxl2, ypxl2, col)
+		r.drawPixel(xpxl2, ypxl2, col)
 	}
 
 	// Main loop
 	if steep {
 		for x := xpxl1 + 1; x <= xpxl2-1; x++ {
-			r.drawPoint(intery, x, col)
+			r.drawPixel(intery, x, col)
 			intery += gradient
 		}
 	} else {
 		for x := xpxl1 + 1; x <= xpxl2-1; x++ {
-			r.drawPoint(x, intery, col)
+			r.drawPixel(x, intery, col)
 			intery += gradient
 		}
 	}
