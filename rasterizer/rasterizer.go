@@ -236,15 +236,14 @@ func parseTransform(trans string) mgl.Mat3 {
 
 func (r *rasterizer) transform(points []float32, trans mgl.Mat3) []float32 {
 	for i := 0; i < len(points); i += 2 {
-		xyz := mgl.Vec3{points[i] * float32(r.sampleRate),
-			points[i+1] * float32(r.sampleRate), 1.0}
+		xyz := mgl.Vec3{points[i],
+			points[i+1], 1.0}
 		transformed := trans.Mul3x1(xyz)
-		points[i] = transformed[0]
-		points[i+1] = transformed[1]
+		points[i] = transformed[0] * float32(r.sampleRate)
+		points[i+1] = transformed[1] * float32(r.sampleRate)
 
 	}
 
-	fmt.Println(points)
 	return points
 }
 
@@ -404,14 +403,6 @@ func (r *rasterizer) drawFlatTopTriangle(x1, y1, x2, y2, x3, y3 float32, col Col
 	}
 }
 
-/*
-type Node struct {
-	XMLName xml.Name
-	Content []byte `xml:",innerxml"`
-	Nodes   []Node `xml:",any"`
-}
-*/
-
 func New(canvas js.Value, filePath string) (*rasterizer, error) {
 	r := &rasterizer{}
 
@@ -461,9 +452,35 @@ func New(canvas js.Value, filePath string) (*rasterizer, error) {
 		}))
 	r.board = b
 
-	r.sampleRate = 2
+	r.sampleRate = 4
 
 	return r, nil
+}
+
+func (r *rasterizer) resolveBuffer() {
+	upscaled := r.pixels
+	r.pixels = make([]byte, 4*r.widthPixels/r.sampleRate*r.heightPixels/r.sampleRate)
+
+	getIndex := func(x, y int) int {
+		return (x + r.widthPixels*y) * 4
+	}
+
+	getIndexPixels := func(x, y int) int {
+		return (x + r.widthPixels/r.sampleRate*y) * 4
+	}
+
+	scaleFactor := byte(r.sampleRate * r.sampleRate)
+	for x := 0; x < r.widthPixels; x++ {
+		for y := 0; y < r.heightPixels; y++ {
+			i := getIndexPixels(x/r.sampleRate, y/r.sampleRate)
+			j := getIndex(x, y)
+
+			r.pixels[i] += upscaled[j] / scaleFactor
+			r.pixels[i+1] += upscaled[j+1] / scaleFactor
+			r.pixels[i+2] += upscaled[j+2] / scaleFactor
+			r.pixels[i+3] += upscaled[j+3] / scaleFactor
+		}
+	}
 }
 
 func (r *rasterizer) Draw() {
@@ -473,7 +490,6 @@ func (r *rasterizer) Draw() {
 	r.height *= float32(r.sampleRate)
 	r.pixels = make([]byte, 4*r.widthPixels*r.heightPixels)
 
-	fmt.Println(len(r.pixels))
 	for i := 0; i < len(r.pixels); i++ {
 		r.pixels[i] = 255
 	}
@@ -482,35 +498,10 @@ func (r *rasterizer) Draw() {
 
 	r.svg.rasterize(r)
 
-	if r.sampleRate > 1 { // Resolve buffer
-		upscaled := r.pixels
-		r.pixels = make([]byte, 4*r.widthPixels/r.sampleRate*r.heightPixels/r.sampleRate)
-
-		//r.widthPixels /= r.sampleRate
-		//r.heightPixels /= r.sampleRate
-		getIndex := func(x, y int) int {
-			return (x + r.widthPixels*y) * 4
-		}
-
-		getIndexPixels := func(x, y int) int {
-			return (x + r.widthPixels/2*y) * 4
-		}
-
-		for x := 0; x < r.widthPixels; x++ {
-			for y := 0; y < r.heightPixels; y++ {
-				i := getIndexPixels(x/2, y/2)
-				j := getIndex(x, y)
-				r.pixels[i] = upscaled[j] / byte(r.sampleRate) * 2
-				r.pixels[i+1] = upscaled[j+1] / byte(r.sampleRate) * 2
-				r.pixels[i+2] = upscaled[j+2] / byte(r.sampleRate) * 2
-				r.pixels[i+3] = upscaled[j+3] / byte(r.sampleRate) * 2
-			}
-		}
-
+	if r.sampleRate > 1 { // Anti aliasing
+		r.resolveBuffer()
 	}
 
-	fmt.Println(len(r.pixels))
-	fmt.Println(r.pixels[:1000])
 	r.board.SetPixels(r.pixels)
 }
 
@@ -564,9 +555,9 @@ func main() {
 	//r, err := New(canvas, "/svg/test1.svg")
 	//r, err := New(canvas, "/svg/test2.svg")
 	//r, err := New(canvas, "/svg/test3.svg")
-	r, err := New(canvas, "/svg/test4.svg")
+	//r, err := New(canvas, "/svg/test4.svg")
 	//r, err := New(canvas, "/svg/test5.svg")
-	//r, err := New(canvas, "/svg/test6.svg")
+	r, err := New(canvas, "/svg/test6.svg")
 
 	if err != nil {
 		panic(err)
