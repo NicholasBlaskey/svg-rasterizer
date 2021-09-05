@@ -25,27 +25,6 @@ type Color struct {
 	a float32
 }
 
-func (c Color) AdjustBrightness(x float32) Color {
-	/*
-		c.r = float32(c.r) * x // + 1.0*(1-x)
-		c.g = float32(c.g) * x //+ 1.0*(1-x)
-		c.b = float32(c.b) * x //+ 1.0*(1-x)
-	*/
-	// TODO Do we need to worry about alpha here?
-
-	/*
-		c.r = x
-		c.g = x
-		c.b = x
-	*/
-	/*
-		c.r = 0.0
-		c.g = 0.0
-		c.b = 0.0
-	*/
-	return c
-}
-
 func maxOfThree(x, y, z float32) float32 {
 	return float32(math.Max(float64(x), math.Max(float64(y), float64(z))))
 }
@@ -154,53 +133,6 @@ func (s *Line) rasterize(r *rasterizer) {
 	r.drawLine(s.X1, s.Y1, s.X2, s.Y2, col)
 }
 
-/*
-func (r *rasterizer) drawLine(x1, y1, x2, y2 float32, col Color) {
-	slope := (y2 - y1) / (x2 - x1)
-
-	// Slope greater than one case
-	if math.Abs(float64(slope)) > 1.0 {
-		if y1 < y2 {
-			r.bresenham(y1, x1, y2, 1.0/slope, col, true)
-		} else { // Flip and y1 and y2
-			r.bresenham(y2, x2, y1, 1.0/slope, col, true)
-		}
-		return
-	}
-
-	// Slope less than one case
-	if x1 < x2 {
-		r.bresenham(x1, y1, x2, slope, col, false)
-	} else { // Flip and x1 and x2
-		r.bresenham(x2, y2, x1, slope, col, false)
-	}
-}
-
-func (r *rasterizer) bresenham(x1, y1, x2, slope float32, col Color, flipped bool) {
-	direction := float32(1.0)
-	if slope < 0 {
-		direction = -1.0
-	}
-
-	epsilon := float32(0.0)
-	y := y1
-	for x := x1; x < x2; x++ {
-		if flipped {
-			r.drawPoint(y, x, col)
-		} else {
-			r.drawPoint(x, y, col)
-		}
-
-		if (slope >= 0 && epsilon+slope < 0.5) || (slope < 0 && epsilon+slope > -0.5) {
-			epsilon += slope
-		} else {
-			y += direction
-			epsilon += slope - direction
-		}
-	}
-}
-*/
-
 type Polygon struct {
 	Fill            string `xml:"fill,attr"`
 	Stroke          string `xml:"stroke,attr"`
@@ -286,7 +218,6 @@ func (r *rasterizer) pointsToTriangles(in string,
 }
 
 func (s *Polygon) rasterize(r *rasterizer) {
-	//s.flatTriangleApproach(r)
 	s.boundingBoxApproach(r)
 }
 
@@ -338,69 +269,6 @@ func (s *Polygon) boundingBoxApproach(r *rasterizer) {
 		r.drawLine(p1X, p1Y, p2X, p2Y, outlineCol)
 	}
 
-}
-
-func (s *Polygon) flatTriangleApproach(r *rasterizer) {
-	triangles, _ := r.pointsToTriangles(s.Points, s.transformMatrix)
-
-	// TODO for loop these triangles when we start doing filling and polygons
-	for _, t := range triangles {
-		/*
-			red, g, b, a := parseColor(s.Fill)
-			r.drawLine(t.X1, t.Y1, t.X2, t.Y2, red, g, b, a)
-			r.drawLine(t.X2, t.Y2, t.X3, t.Y3, red, g, b, a)
-			r.drawLine(t.X1, t.Y1, t.X3, t.Y3, red, g, b, a)
-		*/
-
-		col := parseColor(s.Fill)
-
-		// http://www.sunshine2k.de/coding/java/TriangleRasterization/TriangleRasterization.html
-		if t.Y2 == t.Y3 { // Only flat bottom triangle
-			r.drawFlatBottomTriangle(t.X1, t.Y1, t.X2, t.Y2, t.X3, t.Y3, col)
-			return
-		} else if t.Y1 == t.Y2 { // Only flat top triangle
-			r.drawFlatTopTriangle(t.X1, t.Y1, t.X2, t.Y2, t.X3, t.Y3, col)
-			return
-		}
-
-		// Split triangle into a topflat and bottom flat triangle
-		x4 := t.X1 + (t.Y2-t.Y1)/(t.Y3-t.Y1)*(t.X3-t.X1)
-		y4 := t.Y2
-
-		r.drawFlatBottomTriangle(t.X1, t.Y1, t.X2, t.Y2, x4, y4, col)
-		r.drawFlatTopTriangle(t.X2, t.Y2, x4, y4, t.X3, t.Y3, col)
-
-		/*
-			r.drawLine(t.X1, t.Y1, t.X2, t.Y2, 0, 0, 0, 255)
-			r.drawLine(t.X2, t.Y2, t.X3, t.Y3, 0, 0, 0, 255)
-			r.drawLine(t.X3, t.Y3, t.X1, t.Y1, 0, 0, 0, 255)
-		*/
-	}
-}
-
-func (r *rasterizer) drawFlatBottomTriangle(x1, y1, x2, y2, x3, y3 float32, col Color) {
-	invSlope1 := (x2 - x1) / (y2 - y1)
-	invSlope2 := (x3 - x1) / (y3 - y1)
-	curX1, curX2 := x1, x1
-	for scanLineY := y1; scanLineY <= y2; scanLineY++ {
-		r.drawLine(curX1, scanLineY, curX2, scanLineY, col)
-
-		curX1 += invSlope1
-		curX2 += invSlope2
-	}
-}
-
-func (r *rasterizer) drawFlatTopTriangle(x1, y1, x2, y2, x3, y3 float32, col Color) {
-	invSlope1 := (x3 - x1) / (y3 - y1)
-	invSlope2 := (x3 - x2) / (y3 - y2)
-	curX1, curX2 := x3, x3
-
-	for scanLineY := y3; scanLineY > y1; scanLineY-- {
-		r.drawLine(curX1, scanLineY, curX2, scanLineY, col)
-
-		curX1 -= invSlope1
-		curX2 -= invSlope2
-	}
 }
 
 func New(canvas js.Value, filePath string) (*rasterizer, error) {
@@ -645,70 +513,3 @@ func (r *rasterizer) drawLine(x0, y0, x1, y1 float32, col Color) {
 		}
 	}
 }
-
-/*
-// https://en.wikipedia.org/wiki/Xiaolin_Wu's_line_algorithm
-func (r *rasterizer) drawXialin(x0, y0, x1, y1 float32, col Color) {
-	steep := math.Abs(float64(y1-y0)) > math.Abs(float64(x1-x0))
-	if steep {
-		x0, y0 = y0, x0
-		x1, y1 = y1, x1
-	}
-
-	if x0 > x1 {
-		x0, x1 = x1, x0
-		y0, y1 = y1, y0
-	}
-
-	dx := x1 - x0
-	dy := y1 - y0
-	gradient := dy / dx
-	if dx == 0.0 {
-		gradient = 1.0
-	}
-
-	// Handle first endpoint
-	xend := round(x0)
-	yend := y0 + gradient*(xend-x0)
-	xgap := rfpart(x0 + 0.5)
-	xpxl1 := xend // This will be used in the main loop
-	ypxl1 := float32(int(yend))
-	if steep {
-		r.drawPoint(ypxl1, xpxl1, col.AdjustBrightness(rfpart(yend)*xgap))
-		r.drawPoint(ypxl1+1, xpxl1, col.AdjustBrightness(fpart(yend)*xgap))
-	} else {
-		r.drawPoint(xpxl1, ypxl1, col.AdjustBrightness(rfpart(yend)*xgap))
-		r.drawPoint(xpxl1, ypxl1+1, col.AdjustBrightness(fpart(yend)*xgap))
-	}
-	intery := yend + gradient // first y-intersection for the main loop
-
-	// Handle second endpoint
-	xend = round(x1)
-	yend = y1 + gradient*(xend-x1)
-	xgap = fpart(x1 + 0.5)
-	xpxl2 := xend // This will be used in the main loop
-	ypxl2 := float32(int(yend))
-	if steep {
-		r.drawPoint(ypxl2, xpxl2, col.AdjustBrightness(rfpart(yend)*xgap))
-		r.drawPoint(ypxl2+1, xpxl2, col.AdjustBrightness(fpart(yend)*xgap))
-	} else {
-		r.drawPoint(xpxl2, ypxl2, col.AdjustBrightness(rfpart(yend)*xgap))
-		r.drawPoint(xpxl2, ypxl2+1, col.AdjustBrightness(fpart(yend)*xgap))
-	}
-
-	// Main loop
-	if steep {
-		for x := xpxl1 + 1; x <= xpxl2-1; x++ {
-			r.drawPoint(intery, x, col.AdjustBrightness(rfpart(intery)))
-			r.drawPoint(intery+1, x, col.AdjustBrightness(fpart(intery)))
-			intery += gradient
-		}
-	} else {
-		for x := xpxl1 + 1; x <= xpxl2-1; x++ {
-			r.drawPoint(x, intery, col.AdjustBrightness(rfpart(intery)))
-			r.drawPoint(x, intery+1, col.AdjustBrightness(fpart(intery)))
-			intery += gradient
-		}
-	}
-}
-*/
