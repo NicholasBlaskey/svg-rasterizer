@@ -12,6 +12,9 @@ import (
 	"strings"
 	"syscall/js"
 
+	"encoding/base64"
+	"image/png"
+
 	mgl "github.com/go-gl/mathgl/mgl32"
 
 	"github.com/nicholasblaskey/svg-rasterizer/board"
@@ -86,6 +89,7 @@ type Svg struct {
 	Lines           []Line    `xml:"line"`
 	Polygons        []Polygon `xml:"polygon"`
 	Groups          []Svg     `xml:"g"`
+	Images          []Image   `xml:"image"`
 	Transform       string    `xml:"transform,attr"`
 	transformMatrix mgl.Mat3
 }
@@ -285,6 +289,39 @@ func (s *Polygon) boundingBoxApproach(r *rasterizer) {
 
 }
 
+type Image struct {
+	X    string `xml:"x,attr"`
+	Y    string `xml:"y,attr"`
+	Href string `xml:"href,attr"` // Assume all images of base64 png encoded
+}
+
+func (s *Image) rasterize(r *rasterizer) {
+	fmt.Println(s.Href)
+
+	// Load the image.
+	baseImage := strings.Split(s.Href, ",")[1] // Only works for data:image/png;base64,...
+	decoded, err := base64.StdEncoding.DecodeString(baseImage)
+	if err != nil { // Remove this.
+		panic(err)
+	}
+	reader := bytes.NewReader(decoded)
+
+	img, err := png.Decode(reader)
+	if err != nil {
+		panic(err)
+	}
+
+	fmt.Println(img)
+
+	// Generate mip maps. for anti aliasing???
+
+	// Loop through all the pixels
+	// Then get the coordinate from texture space from screenspace?
+	// then implmeenet sampleNearest and sampleBiliniear
+
+	_ = png.Encoder{}
+}
+
 func New(canvas js.Value, filePath string) (*rasterizer, error) {
 	r := &rasterizer{}
 
@@ -303,15 +340,19 @@ func New(canvas js.Value, filePath string) (*rasterizer, error) {
 	// TODO Calculate needed drawing info.
 	// This is probaly very wrong. However keep going and revise
 	// this to keep handling more test cases.
-	viewBox := strings.Split(svg.ViewBox, " ")
-	widthPixels, _ := strconv.ParseFloat(viewBox[2], 64)
-	heightPixels, _ := strconv.ParseFloat(viewBox[3], 64)
-
 	width, _ := strconv.ParseFloat(strings.Split(svg.Width, "px")[0], 64)
 	height, _ := strconv.ParseFloat(strings.Split(svg.Height, "px")[0], 64)
 
-	r.widthPixels = int(widthPixels)
-	r.heightPixels = int(heightPixels)
+	if svg.ViewBox != "" { // Does not have a viewbox
+		viewBox := strings.Split(svg.ViewBox, " ")
+		widthPixels, _ := strconv.ParseFloat(viewBox[2], 64)
+		heightPixels, _ := strconv.ParseFloat(viewBox[3], 64)
+		r.widthPixels = int(widthPixels)
+		r.heightPixels = int(heightPixels)
+	} else {
+		r.widthPixels, r.heightPixels = int(width), int(height)
+	}
+
 	r.width = float32(width)
 	r.height = float32(height)
 
@@ -423,6 +464,9 @@ func (s *Svg) rasterize(r *rasterizer) {
 
 		group.rasterize(r)
 	}
+	for _, image := range s.Images {
+		image.rasterize(r)
+	}
 }
 
 func getFile(filePath string) string {
@@ -453,7 +497,8 @@ func main() {
 	//r, err := New(canvas, "/svg/test3.svg")
 	//r, err := New(canvas, "/svg/test4.svg")
 	//r, err := New(canvas, "/svg/test5.svg")
-	r, err := New(canvas, "/svg/test6.svg")
+	//r, err := New(canvas, "/svg/test6.svg")
+	r, err := New(canvas, "/svg/test7.svg")
 
 	if err != nil {
 		panic(err)
