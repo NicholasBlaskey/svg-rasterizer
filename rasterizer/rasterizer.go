@@ -290,13 +290,16 @@ func (s *Polygon) boundingBoxApproach(r *rasterizer) {
 }
 
 type Image struct {
-	X    string `xml:"x,attr"`
-	Y    string `xml:"y,attr"`
-	Href string `xml:"href,attr"` // Assume all images of base64 png encoded
+	X      int    `xml:"x,attr"`
+	Y      int    `xml:"y,attr"`
+	Width  int    `xml:"width,attr"`
+	Height int    `xml:"height,attr"`
+	Href   string `xml:"href,attr"` // Assume all images of base64 png encoded
 }
 
 func (s *Image) rasterize(r *rasterizer) {
 	fmt.Println(s.Href)
+	fmt.Println(r.width, r.height)
 
 	// Load the image.
 	baseImage := strings.Split(s.Href, ",")[1] // Only works for data:image/png;base64,...
@@ -311,15 +314,26 @@ func (s *Image) rasterize(r *rasterizer) {
 		panic(err)
 	}
 
-	fmt.Println(img)
-
 	// Generate mip maps. for anti aliasing???
 
 	// Loop through all the pixels
 	// Then get the coordinate from texture space from screenspace?
 	// then implmeenet sampleNearest and sampleBiliniear
+	for x := s.X; x < s.X+s.Width; x++ {
+		for y := s.Y; y < s.Y+s.Height; y++ {
+			c := img.At(x, y)
+			red, g, b, a := c.RGBA()
 
-	_ = png.Encoder{}
+			redF, gF, bF, aF := float32(red)/0xFFFF, float32(g)/0xFFFF,
+				float32(b)/0xFFFF, float32(a)/0xFFFF
+			fmt.Println(redF, gF, bF, aF)
+
+			break
+			r.drawPixel(float32(x), float32(y),
+				Color{float32(redF), float32(gF), float32(bF), float32(aF)})
+		}
+	}
+
 }
 
 func New(canvas js.Value, filePath string) (*rasterizer, error) {
@@ -375,7 +389,7 @@ func New(canvas js.Value, filePath string) (*rasterizer, error) {
 		}))
 	r.board = b
 
-	r.sampleRate = 2
+	r.sampleRate = 1
 
 	return r, nil
 }
