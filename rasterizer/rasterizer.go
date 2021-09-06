@@ -326,9 +326,7 @@ func (s *Image) rasterize(r *rasterizer) {
 
 			redF, gF, bF, aF := float32(red)/0xFFFF, float32(g)/0xFFFF,
 				float32(b)/0xFFFF, float32(a)/0xFFFF
-			fmt.Println(redF, gF, bF, aF)
 
-			break
 			r.drawPixel(float32(x), float32(y),
 				Color{float32(redF), float32(gF), float32(bF), float32(aF)})
 		}
@@ -424,6 +422,8 @@ func (r *rasterizer) Draw() {
 	r.origWidthPixels, r.origHeightPixels = r.widthPixels, r.heightPixels
 	r.origWidth, r.origHeight = r.width, r.height
 
+	r.pointsToFill = []int{}
+
 	r.widthPixels *= r.sampleRate
 	r.heightPixels *= r.sampleRate
 	r.width *= float32(r.sampleRate)
@@ -449,6 +449,8 @@ func (r *rasterizer) Draw() {
 		r.pixels[point+2] = byte(r.colorOfPointsToFill[i].b * 255.0)
 		r.pixels[point+3] = byte(r.colorOfPointsToFill[i].a * 255.0)
 	}
+	//fmt.Println(r.pixels)
+	//fmt.Println(len(r.pixels))
 
 	r.board.SetPixels(r.pixels)
 
