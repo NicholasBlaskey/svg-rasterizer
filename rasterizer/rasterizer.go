@@ -291,11 +291,13 @@ func (s *Polygon) boundingBoxApproach(r *rasterizer) {
 }
 
 type Image struct {
-	X      int    `xml:"x,attr"`
-	Y      int    `xml:"y,attr"`
-	Width  int    `xml:"width,attr"`
-	Height int    `xml:"height,attr"`
-	Href   string `xml:"href,attr"` // Assume all images of base64 png encoded
+	X          int    `xml:"x,attr"`
+	Y          int    `xml:"y,attr"`
+	Width      int    `xml:"width,attr"`
+	Height     int    `xml:"height,attr"`
+	Href       string `xml:"href,attr"` // Assume all images of base64 png encoded
+	imageSizeX int    // Width of image loaded
+	imageSizeY int    // Height of image laoded
 }
 
 func (s *Image) rasterize(r *rasterizer) {
@@ -314,6 +316,9 @@ func (s *Image) rasterize(r *rasterizer) {
 	if err != nil {
 		panic(err)
 	}
+	bounds := img.Bounds()
+	s.imageSizeX = bounds.Max.X - bounds.Min.X
+	s.imageSizeY = bounds.Max.Y - bounds.Min.Y
 
 	// Generate mip maps. for anti aliasing???
 
@@ -322,8 +327,8 @@ func (s *Image) rasterize(r *rasterizer) {
 	// then implmeenet sampleNearest and sampleBiliniear
 	for x := s.X; x < s.X+s.Width; x++ {
 		for y := s.Y; y < s.Y+s.Height; y++ {
-			//red, g, b, a := s.sampleNearest(img, float32(x)+0.5, float32(y)+0.5)
-			red, g, b, a := s.sampleBilinear(img, float32(x), float32(y))
+			red, g, b, a := s.sampleNearest(img, float32(x), float32(y))
+			//red, g, b, a := s.sampleBilinear(img, float32(x), float32(y))
 
 			r.drawPixel(float32(x), float32(y), Color{red, g, b, a})
 
@@ -333,8 +338,11 @@ func (s *Image) rasterize(r *rasterizer) {
 }
 
 func (s *Image) sampleNearest(img image.Image, x, y float32) (float32, float32, float32, float32) {
-	x -= float32(s.X)
-	y -= float32(s.Y)
+	x -= float32(s.X) + 0.5
+	y -= float32(s.Y) + 0.5
+
+	x = x / float32(s.Width) * float32(s.imageSizeX)
+	y = y / float32(s.Height) * float32(s.imageSizeY)
 
 	c := img.At(int(x), int(y))
 	red, g, b, a := c.RGBA()
@@ -343,15 +351,25 @@ func (s *Image) sampleNearest(img image.Image, x, y float32) (float32, float32, 
 		float32(b) / 0xFFFF, float32(a) / 0xFFFF
 }
 
-func (s *Image) sampleBilinear(img image.Image, u, v float32) (float32, float32, float32, float32) {
+func (s *Image) sampleBilinear(img image.Image, x, y float32) (float32, float32, float32, float32) {
 	w, h := float32(s.Width), float32(s.Height)
 
-	i, j := u+1/2, v+1/2
-	st := u - (i + 1/2)
-	tt := v - (j + 1/2)
+	u, v := x/w, y/h
+	i, j := u+1/w, v+1/h
+	st := u - (i + 1/w)
+	tt := v - (j + 1/h)
 
-	fmt.Printf("(w, h) = (%f, %f) (u, v) = (%f, %f) (i, j) = (%f, %f) (s, t) = (%f, %f)\n",
-		w, h, u, v, i, j, st, tt)
+	if st < 0 {
+		st = 0
+	}
+	if tt < 0 {
+		tt = 0
+	}
+
+	// TODO make sure coordinate is right and just draw the svg correctly.
+	// Also make sure we do the actual blending now.
+	fmt.Printf("(w, h) = (%f, %f) (x, y) = (%f, %f) (u, v) = (%f, %f) (i, j) = (%f, %f) (s, t) = (%f, %f)\n",
+		w, h, x, y, u, v, i, j, st, tt)
 	//u := (x - float32(s.X)) / w
 	//v := (y - float32(s.Y)) / h
 
