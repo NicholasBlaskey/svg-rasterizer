@@ -13,6 +13,7 @@ import (
 	"syscall/js"
 
 	"encoding/base64"
+	"image"
 	"image/png"
 
 	mgl "github.com/go-gl/mathgl/mgl32"
@@ -321,17 +322,44 @@ func (s *Image) rasterize(r *rasterizer) {
 	// then implmeenet sampleNearest and sampleBiliniear
 	for x := s.X; x < s.X+s.Width; x++ {
 		for y := s.Y; y < s.Y+s.Height; y++ {
-			c := img.At(x, y)
-			red, g, b, a := c.RGBA()
+			//red, g, b, a := s.sampleNearest(img, float32(x)+0.5, float32(y)+0.5)
+			red, g, b, a := s.sampleBilinear(img, float32(x), float32(y))
 
-			redF, gF, bF, aF := float32(red)/0xFFFF, float32(g)/0xFFFF,
-				float32(b)/0xFFFF, float32(a)/0xFFFF
+			r.drawPixel(float32(x), float32(y), Color{red, g, b, a})
 
-			r.drawPixel(float32(x), float32(y),
-				Color{float32(redF), float32(gF), float32(bF), float32(aF)})
 		}
 	}
 
+}
+
+func (s *Image) sampleNearest(img image.Image, x, y float32) (float32, float32, float32, float32) {
+	x -= float32(s.X)
+	y -= float32(s.Y)
+
+	c := img.At(int(x), int(y))
+	red, g, b, a := c.RGBA()
+
+	return float32(red) / 0xFFFF, float32(g) / 0xFFFF,
+		float32(b) / 0xFFFF, float32(a) / 0xFFFF
+}
+
+func (s *Image) sampleBilinear(img image.Image, u, v float32) (float32, float32, float32, float32) {
+	w, h := float32(s.Width), float32(s.Height)
+
+	i, j := u+1/2, v+1/2
+	st := u - (i + 1/2)
+	tt := v - (j + 1/2)
+
+	fmt.Printf("(w, h) = (%f, %f) (u, v) = (%f, %f) (i, j) = (%f, %f) (s, t) = (%f, %f)\n",
+		w, h, u, v, i, j, st, tt)
+	//u := (x - float32(s.X)) / w
+	//v := (y - float32(s.Y)) / h
+
+	c := img.At(int(i*w), int(j*h))
+	red, g, b, a := c.RGBA()
+
+	return float32(red) / 0xFFFF, float32(g) / 0xFFFF,
+		float32(b) / 0xFFFF, float32(a) / 0xFFFF
 }
 
 func New(canvas js.Value, filePath string) (*rasterizer, error) {
