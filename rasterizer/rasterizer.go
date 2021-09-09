@@ -14,6 +14,7 @@ import (
 
 	"encoding/base64"
 	"image"
+	"image/color"
 	"image/png"
 
 	mgl "github.com/go-gl/mathgl/mgl32"
@@ -327,8 +328,8 @@ func (s *Image) rasterize(r *rasterizer) {
 	// then implmeenet sampleNearest and sampleBiliniear
 	for x := s.X; x < s.X+s.Width; x++ {
 		for y := s.Y; y < s.Y+s.Height; y++ {
-			red, g, b, a := s.sampleNearest(img, float32(x), float32(y))
-			//red, g, b, a := s.sampleBilinear(img, float32(x), float32(y))
+			//red, g, b, a := s.sampleNearest(img, float32(x), float32(y))
+			red, g, b, a := s.sampleBilinear(img, float32(x), float32(y))
 
 			r.drawPixel(float32(x), float32(y), Color{red, g, b, a})
 
@@ -336,6 +337,14 @@ func (s *Image) rasterize(r *rasterizer) {
 	}
 
 }
+
+/* TODO
+// Return center of texture
+func (s *Image) transformTextureCoord(img image.Image, x, y float32) (float32, float32) {
+
+	return x, y
+}
+*/
 
 func (s *Image) sampleNearest(img image.Image, x, y float32) (float32, float32, float32, float32) {
 	x -= float32(s.X) + 0.5
@@ -351,29 +360,66 @@ func (s *Image) sampleNearest(img image.Image, x, y float32) (float32, float32, 
 		float32(b) / 0xFFFF, float32(a) / 0xFFFF
 }
 
+func blendColor(c0, c1 color.Color, amount float32) color.Color {
+	r0, g0, b0, a0 := c0.RGBA()
+	r1, g1, b1, a1 := c1.RGBA()
+
+	return color.NRGBA64{blend(r0, r1, amount), blend(g0, g1, amount),
+		blend(b0, b1, amount), blend(a0, a1, amount)}
+}
+
+func blend(x0, x1 uint32, amount float32) uint16 {
+	return uint16((float32(x0)*amount + float32(x1)*(1-amount)))
+}
+
 func (s *Image) sampleBilinear(img image.Image, x, y float32) (float32, float32, float32, float32) {
-	w, h := float32(s.Width), float32(s.Height)
+	x -= float32(s.X)
+	y -= float32(s.Y)
 
-	u, v := x/w, y/h
-	i, j := u+1/w, v+1/h
-	st := u - (i + 1/w)
-	tt := v - (j + 1/h)
+	x = x / float32(s.Width) * float32(s.imageSizeX)
+	y = y / float32(s.Height) * float32(s.imageSizeY)
 
-	if st < 0 {
-		st = 0
-	}
-	if tt < 0 {
-		tt = 0
-	}
+	// Okay so we are just at a texture point now.
+	// Adding 1/2 gets us to the texture point.
+	tt := x - float32(int(x)) + 1/2
+	st := y - float32(int(y)) + 1/2
+
+	fmt.Printf("(%d, %d) (%d, %d)\n", int(x-1/2), int(y+1/2), int(x-1/2), int(y-1/2))
+
+	f00 := img.At(int(x-1/2), int(y+1/2))
+	f01 := img.At(int(x-1/2), int(y-1/2))
+	f10 := img.At(int(x+1/2), int(y+1/2))
+	f11 := img.At(int(x+1/2), int(y-1/2))
+
+	c0 := blendColor(f00, f10, tt)
+	c1 := blendColor(f01, f11, tt)
+	c := blendColor(c0, c1, st)
+
+	//fmt.Println(c, f00, f10, tt)
+
+	/*
+		w, h := float32(s.Width), float32(s.Height)
+
+			u, v := x/w, y/h
+			i, j := u+1/w, v+1/h
+			st := u - (i + 1/w)
+			tt := v - (j + 1/h)
+
+
+			if st < 0 {
+				st = 0
+			}
+			if tt < 0 {
+				tt = 0
+			}
+	*/
 
 	// TODO make sure coordinate is right and just draw the svg correctly.
 	// Also make sure we do the actual blending now.
-	fmt.Printf("(w, h) = (%f, %f) (x, y) = (%f, %f) (u, v) = (%f, %f) (i, j) = (%f, %f) (s, t) = (%f, %f)\n",
-		w, h, x, y, u, v, i, j, st, tt)
-	//u := (x - float32(s.X)) / w
-	//v := (y - float32(s.Y)) / h
+	//	fmt.Printf("(w, h) = (%f, %f) (x, y) = (%f, %f) (u, v) = (%f, %f) (i, j) = (%f, %f) (s, t) = (%f, %f)\n",
+	//	w, h, x, y, u, v, i, j, st, tt)
+	//c := img.At(int(x), int(y))
 
-	c := img.At(int(i*w), int(j*h))
 	red, g, b, a := c.RGBA()
 
 	return float32(red) / 0xFFFF, float32(g) / 0xFFFF,
