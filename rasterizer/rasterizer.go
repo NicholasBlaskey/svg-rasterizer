@@ -305,6 +305,10 @@ func (s *Image) rasterize(r *rasterizer) {
 	fmt.Println(s.Href)
 	fmt.Println(r.width, r.height)
 
+	// TODO Remove this
+	s.Width = 128
+	s.Height = s.Width
+
 	// Load the image.
 	baseImage := strings.Split(s.Href, ",")[1] // Only works for data:image/png;base64,...
 	decoded, err := base64.StdEncoding.DecodeString(baseImage)
@@ -338,14 +342,6 @@ func (s *Image) rasterize(r *rasterizer) {
 
 }
 
-/* TODO
-// Return center of texture
-func (s *Image) transformTextureCoord(img image.Image, x, y float32) (float32, float32) {
-
-	return x, y
-}
-*/
-
 func (s *Image) sampleNearest(img image.Image, x, y float32) (float32, float32, float32, float32) {
 	x -= float32(s.X) + 0.5
 	y -= float32(s.Y) + 0.5
@@ -369,18 +365,21 @@ func blendColor(c0, c1 color.Color, amount float32) color.Color {
 }
 
 func blend(x0, x1 uint32, amount float32) uint16 {
+	// TODO frequently we are over one of them so handle this
+	// for non power of twos widths and heights
+	// We also look pretty terrible for 5123
+
 	return uint16((float32(x0)*amount + float32(x1)*(1-amount)))
 }
 
 func (s *Image) sampleBilinear(img image.Image, x, y float32) (float32, float32, float32, float32) {
 	x -= float32(s.X) + 0.5
 	y -= float32(s.Y) + 0.5
-
 	x = x / float32(s.Width) * float32(s.imageSizeX)
 	y = y / float32(s.Height) * float32(s.imageSizeY)
 
-	tt := x - float32(int(x)) + 1/2
-	st := y - float32(int(y)) + 1/2
+	tt := x - float32(int(x)) + 0.5
+	st := y - float32(int(y)) + 0.5
 
 	//fmt.Printf("(%f, %f) (%f, %f) (%d, %d)\n", x, y, y+1/2.0, y-1/2.0, int(y+1/2.0), int(y-1/2.0))
 	//fmt.Printf("(%d, %d) (%d, %d)\n", int(x-0.5), int(y-0.5), int(x+0.5), int(y+0.5))
@@ -395,6 +394,8 @@ func (s *Image) sampleBilinear(img image.Image, x, y float32) (float32, float32,
 	c0 := blendColor(f00, f10, tt)
 	c1 := blendColor(f01, f11, tt)
 	c := blendColor(c0, c1, st)
+
+	//return tt, st, 1.0, 1.0
 
 	//fmt.Println(c, f00, f10, tt)
 
