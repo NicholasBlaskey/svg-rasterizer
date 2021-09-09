@@ -373,23 +373,24 @@ func blend(x0, x1 uint32, amount float32) uint16 {
 }
 
 func (s *Image) sampleBilinear(img image.Image, x, y float32) (float32, float32, float32, float32) {
-	x -= float32(s.X)
-	y -= float32(s.Y)
+	x -= float32(s.X) + 0.5
+	y -= float32(s.Y) + 0.5
 
 	x = x / float32(s.Width) * float32(s.imageSizeX)
 	y = y / float32(s.Height) * float32(s.imageSizeY)
 
-	// Okay so we are just at a texture point now.
-	// Adding 1/2 gets us to the texture point.
 	tt := x - float32(int(x)) + 1/2
 	st := y - float32(int(y)) + 1/2
 
-	fmt.Printf("(%d, %d) (%d, %d)\n", int(x-1/2), int(y+1/2), int(x-1/2), int(y-1/2))
+	//fmt.Printf("(%f, %f) (%f, %f) (%d, %d)\n", x, y, y+1/2.0, y-1/2.0, int(y+1/2.0), int(y-1/2.0))
+	//fmt.Printf("(%d, %d) (%d, %d)\n", int(x-0.5), int(y-0.5), int(x+0.5), int(y+0.5))
 
-	f00 := img.At(int(x-1/2), int(y+1/2))
-	f01 := img.At(int(x-1/2), int(y-1/2))
-	f10 := img.At(int(x+1/2), int(y+1/2))
-	f11 := img.At(int(x+1/2), int(y-1/2))
+	f00 := img.At(int(x-0.5), int(y+0.5))
+	f01 := img.At(int(x-0.5), int(y-0.5))
+	f10 := img.At(int(x+0.5), int(y+0.5))
+	f11 := img.At(int(x+0.5), int(y-0.5))
+
+	//fmt.Println(tt, st, f00, f01, f10, f11)
 
 	c0 := blendColor(f00, f10, tt)
 	c1 := blendColor(f01, f11, tt)
