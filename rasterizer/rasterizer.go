@@ -378,6 +378,11 @@ type mip struct {
 	data []byte
 }
 
+func (m *mip) At(x, y int) (byte, byte, byte, byte) {
+	i := x + y*m.w
+	return m.data[i], m.data[i+1], m.data[i+2], m.data[i+3]
+}
+
 // Must be a power of two image
 func generateMipMaps(img image.Image) []mip {
 	bounds := img.Bounds()
@@ -397,21 +402,16 @@ func generateMipMaps(img image.Image) []mip {
 			mips[0].data[i+3] = byte(float32(a) / 0xFFFF * 0xFF)
 		}
 	}
-
 	w /= 2
 	h /= 2
+
 	for w > 1 && h > 1 {
 		buff := downSampleBuffer(mips[len(mips)-1].data, 2, w, h)
-		mips = append(mips, mip{w, h, buff})
-
-		fmt.Println("w, h", w, h, len(buff))
 
 		w /= 2
 		h /= 2
-	}
 
-	for _, m := range mips {
-		fmt.Println(m)
+		mips = append(mips, mip{w, h, buff})
 	}
 
 	return mips
@@ -439,34 +439,32 @@ func (s *Image) rasterize(r *rasterizer) {
 	s.imageSizeY = bounds.Max.Y - bounds.Min.Y
 
 	mipMaps := generateMipMaps(img) // TODO make this at the start once
-	panic(mipMaps)
 
 	// Loop through all the pixels
 	// Then get the coordinate from texture space from screenspace?
 	// then implmeenet sampleNearest and sampleBiliniear
 	for x := s.X; x < s.X+s.Width; x++ {
 		for y := s.Y; y < s.Y+s.Height; y++ {
-			//red, g, b, a := s.sampleNearest(img, float32(x), float32(y))
-			red, g, b, a := s.sampleBilinear(img, float32(x), float32(y))
+			col := s.sampleNearest(mipMaps[0], float32(x), float32(y))
+			//red, g, b, a := s.sampleBilinear(img, float32(x), float32(y))
 
-			r.drawPixel(float32(x), float32(y), Color{red, g, b, a})
+			r.drawPixel(float32(x), float32(y), col)
 
 		}
 	}
 }
 
-func (s *Image) sampleNearest(img image.Image, x, y float32) (float32, float32, float32, float32) {
+func (s *Image) sampleNearest(img mip, x, y float32) Color {
 	x -= float32(s.X) + 0.5
 	y -= float32(s.Y) + 0.5
 
 	x = x / float32(s.Width) * float32(s.imageSizeX)
 	y = y / float32(s.Height) * float32(s.imageSizeY)
 
-	c := img.At(int(x), int(y))
-	red, g, b, a := c.RGBA()
+	red, g, b, a := img.At(int(x), int(y))
 
-	return float32(red) / 0xFFFF, float32(g) / 0xFFFF,
-		float32(b) / 0xFFFF, float32(a) / 0xFFFF
+	return Color{float32(red) / 0xFF, float32(g) / 0xFF,
+		float32(b) / 0xFF, float32(a) / 0xFF}
 }
 
 func blendColor(c0, c1 color.Color, amount float32) color.Color {
@@ -489,13 +487,6 @@ func (s *Image) sampleBilinear(img image.Image, x, y float32) (float32, float32,
 
 	tt := x - float32(int(x+0.5)) + 0.5
 	st := y - float32(int(y+0.5)) + 0.5
-
-	if tt < 0 || tt > 1.0 {
-		fmt.Println("tt", tt)
-	}
-	if st < 0 || st > 1.0 {
-		fmt.Println("st", st)
-	}
 
 	//fmt.Printf("(%f, %f), (%f, %f)\n", x, y, tt, st)
 	//	fmt.Printf("(%f, %f) (%f, %f) (%d, %d)\n", x, y, y+1/2.0, y-1/2.0, int(y+1/2.0), int(y-1/2.0))
