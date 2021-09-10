@@ -363,13 +363,13 @@ func (s *Polygon) boundingBoxApproach(r *rasterizer) {
 }
 
 type Image struct {
-	X          int    `xml:"x,attr"`
-	Y          int    `xml:"y,attr"`
-	Width      int    `xml:"width,attr"`
-	Height     int    `xml:"height,attr"`
-	Href       string `xml:"href,attr"` // Assume all images of base64 png encoded
-	imageSizeX int    // Width of image loaded
-	imageSizeY int    // Height of image laoded
+	X      int    `xml:"x,attr"`
+	Y      int    `xml:"y,attr"`
+	Width  int    `xml:"width,attr"`
+	Height int    `xml:"height,attr"`
+	Href   string `xml:"href,attr"` // Assume all images of base64 png encoded
+	//imageSizeX int    // Width of image loaded
+	//imageSizeY int    // Height of image laoded
 }
 
 type mip struct {
@@ -379,7 +379,7 @@ type mip struct {
 }
 
 func (m *mip) At(x, y int) (byte, byte, byte, byte) {
-	i := x + y*m.w
+	i := (x + y*m.w) * 4
 	return m.data[i], m.data[i+1], m.data[i+2], m.data[i+3]
 }
 
@@ -402,8 +402,6 @@ func generateMipMaps(img image.Image) []mip {
 			mips[0].data[i+3] = byte(float32(a) / 0xFFFF * 0xFF)
 		}
 	}
-	w /= 2
-	h /= 2
 
 	for w > 1 && h > 1 {
 		buff := downSampleBuffer(mips[len(mips)-1].data, 2, w, h)
@@ -418,9 +416,6 @@ func generateMipMaps(img image.Image) []mip {
 }
 
 func (s *Image) rasterize(r *rasterizer) {
-	// TODO Remove this
-	//s.Width = 128
-	//s.Height = s.Width
 
 	// Load the image.
 	baseImage := strings.Split(s.Href, ",")[1] // Only works for data:image/png;base64,...
@@ -434,11 +429,22 @@ func (s *Image) rasterize(r *rasterizer) {
 	if err != nil {
 		panic(err)
 	}
-	bounds := img.Bounds()
-	s.imageSizeX = bounds.Max.X - bounds.Min.X
-	s.imageSizeY = bounds.Max.Y - bounds.Min.Y
+
+	/*
+		bounds := img.Bounds()
+			s.imageSizeX = bounds.Max.X - bounds.Min.X
+			s.imageSizeY = bounds.Max.Y - bounds.Min.Y
+	*/
 
 	mipMaps := generateMipMaps(img) // TODO make this at the start once
+
+	for i, m := range mipMaps {
+		fmt.Println(i, m.w, m.h, len(m.data))
+	}
+
+	// TODO Remove this
+	//s.Width = 128
+	//s.Height = s.Width
 
 	// Loop through all the pixels
 	// Then get the coordinate from texture space from screenspace?
@@ -458,8 +464,8 @@ func (s *Image) sampleNearest(img mip, x, y float32) Color {
 	x -= float32(s.X) + 0.5
 	y -= float32(s.Y) + 0.5
 
-	x = x / float32(s.Width) * float32(s.imageSizeX)
-	y = y / float32(s.Height) * float32(s.imageSizeY)
+	x = x / float32(s.Width) * float32(img.w)
+	y = y / float32(s.Height) * float32(img.h)
 
 	red, g, b, a := img.At(int(x), int(y))
 
@@ -479,11 +485,12 @@ func blend(x0, x1 uint32, amount float32) uint16 {
 	return uint16((float32(x0)*amount + float32(x1)*(1-amount)))
 }
 
-func (s *Image) sampleBilinear(img image.Image, x, y float32) (float32, float32, float32, float32) {
+/*
+func (s *Image) sampleBilinear(img mip, x, y float32) (float32, float32, float32, float32) {
 	x = x - float32(s.X) + 0.5
 	y = y - float32(s.Y) + 0.5
-	x = x / float32(s.Width) * float32(s.imageSizeX)
-	y = y / float32(s.Height) * float32(s.imageSizeY)
+	x = x / float32(s.Width) * float32(img.w)
+	y = y / float32(s.Height) * float32(img.h)
 
 	tt := x - float32(int(x+0.5)) + 0.5
 	st := y - float32(int(y+0.5)) + 0.5
@@ -497,44 +504,16 @@ func (s *Image) sampleBilinear(img image.Image, x, y float32) (float32, float32,
 	f10 := img.At(int(x+0.5), int(y+0.5))
 	f11 := img.At(int(x+0.5), int(y-0.5))
 
-	//fmt.Println(tt, st, f00, f01, f10, f11)
-
 	c0 := blendColor(f00, f10, tt)
 	c1 := blendColor(f01, f11, tt)
 	c := blendColor(c0, c1, st)
-
-	//return tt, st, 1.0, 1.0
-
-	//fmt.Println(c, f00, f10, tt)
-
-	/*
-		w, h := float32(s.Width), float32(s.Height)
-
-			u, v := x/w, y/h
-			i, j := u+1/w, v+1/h
-			st := u - (i + 1/w)
-			tt := v - (j + 1/h)
-
-
-			if st < 0 {
-				st = 0
-			}
-			if tt < 0 {
-				tt = 0
-			}
-	*/
-
-	// TODO make sure coordinate is right and just draw the svg correctly.
-	// Also make sure we do the actual blending now.
-	//	fmt.Printf("(w, h) = (%f, %f) (x, y) = (%f, %f) (u, v) = (%f, %f) (i, j) = (%f, %f) (s, t) = (%f, %f)\n",
-	//	w, h, x, y, u, v, i, j, st, tt)
-	//c := img.At(int(x), int(y))
 
 	red, g, b, a := c.RGBA()
 
 	return float32(red) / 0xFFFF, float32(g) / 0xFFFF,
 		float32(b) / 0xFFFF, float32(a) / 0xFFFF
 }
+*/
 
 func New(canvas js.Value, filePath string) (*rasterizer, error) {
 	r := &rasterizer{}
@@ -589,7 +568,7 @@ func New(canvas js.Value, filePath string) (*rasterizer, error) {
 		}))
 	r.board = b
 
-	r.sampleRate = 2
+	r.sampleRate = 1
 
 	return r, nil
 }
@@ -605,9 +584,6 @@ func downSampleBuffer(from []byte, sampleRate int, w, h int) []byte {
 			i := (x/sampleRate + y/sampleRate*targetW) * 4
 			j := (x + y*w) * 4
 
-			if w == 1 {
-				fmt.Println(i, j, w, h, sampleRate, targetW, targetH, "IJ")
-			}
 			target[i] += from[j] / scaleFactor
 			target[i+1] += from[j+1] / scaleFactor
 			target[i+2] += from[j+2] / scaleFactor
