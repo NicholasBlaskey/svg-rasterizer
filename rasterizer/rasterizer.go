@@ -365,24 +365,28 @@ func blendColor(c0, c1 color.Color, amount float32) color.Color {
 }
 
 func blend(x0, x1 uint32, amount float32) uint16 {
-	// TODO frequently we are over one of them so handle this
-	// for non power of twos widths and heights
-	// We also look pretty terrible for 5123
-
 	return uint16((float32(x0)*amount + float32(x1)*(1-amount)))
 }
 
 func (s *Image) sampleBilinear(img image.Image, x, y float32) (float32, float32, float32, float32) {
-	x -= float32(s.X) + 0.5
-	y -= float32(s.Y) + 0.5
+	x = x - float32(s.X) + 0.5
+	y = y - float32(s.Y) + 0.5
 	x = x / float32(s.Width) * float32(s.imageSizeX)
 	y = y / float32(s.Height) * float32(s.imageSizeY)
 
-	tt := x - float32(int(x)) + 0.5
-	st := y - float32(int(y)) + 0.5
+	tt := x - float32(int(x+0.5)) + 0.5
+	st := y - float32(int(y+0.5)) + 0.5
 
-	//fmt.Printf("(%f, %f) (%f, %f) (%d, %d)\n", x, y, y+1/2.0, y-1/2.0, int(y+1/2.0), int(y-1/2.0))
-	//fmt.Printf("(%d, %d) (%d, %d)\n", int(x-0.5), int(y-0.5), int(x+0.5), int(y+0.5))
+	if tt < 0 || tt > 1.0 {
+		fmt.Println("tt", tt)
+	}
+	if st < 0 || st > 1.0 {
+		fmt.Println("st", st)
+	}
+
+	//fmt.Printf("(%f, %f), (%f, %f)\n", x, y, tt, st)
+	//	fmt.Printf("(%f, %f) (%f, %f) (%d, %d)\n", x, y, y+1/2.0, y-1/2.0, int(y+1/2.0), int(y-1/2.0))
+	//fmt.Printf("above (%d, %d) (%d, %d)\n", int(x-0.5), int(y-0.5), int(x+0.5), int(y+0.5))
 
 	f00 := img.At(int(x-0.5), int(y+0.5))
 	f01 := img.At(int(x-0.5), int(y-0.5))
