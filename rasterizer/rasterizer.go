@@ -372,16 +372,55 @@ type Image struct {
 	imageSizeY int    // Height of image laoded
 }
 
+type mip struct {
+	w    int
+	h    int
+	data []byte
+}
+
+// Must be a power of two image
+func generateMipMaps(img image.Image) []mip {
+	bounds := img.Bounds()
+	w := bounds.Max.X - bounds.Min.X
+	h := bounds.Max.Y - bounds.Min.Y
+
+	// Get original mip.
+	mips := []mip{mip{w, h, make([]byte, w*h*4)}}
+	for x := 0; x < w; x++ {
+		for y := 0; y < h; y++ {
+			r, g, b, a := img.At(x, y).RGBA()
+
+			i := (x + y*w) * 4
+			mips[0].data[i] = byte(float32(r) / 0xFFFF * 0xFF)
+			mips[0].data[i+1] = byte(float32(g) / 0xFFFF * 0xFF)
+			mips[0].data[i+2] = byte(float32(b) / 0xFFFF * 0xFF)
+			mips[0].data[i+3] = byte(float32(a) / 0xFFFF * 0xFF)
+		}
+	}
+
+	w /= 2
+	h /= 2
+	for w > 1 && h > 1 {
+		buff := downSampleBuffer(mips[len(mips)-1].data, 2, w, h)
+		mips = append(mips, mip{w, h, buff})
+
+		fmt.Println("w, h", w, h, len(buff))
+
+		w /= 2
+		h /= 2
+	}
+
+	for _, m := range mips {
+		fmt.Println(m)
+	}
+
+	return mips
+}
+
 func (s *Image) rasterize(r *rasterizer) {
-	fmt.Println(s.Href)
-	fmt.Println(r.width, r.height)
-
-	//	mipMaps := generateMipMaps() // TODO make this at the start once
-	panic("BREAK")
-
 	// TODO Remove this
-	s.Width = 128
-	s.Height = s.Width
+	//s.Width = 128
+	//s.Height = s.Width
 
 	// Load the image.
 	baseImage := strings.Split(s.Href, ",")[1] // Only works for data:image/png;base64,...
@@ -399,7 +438,8 @@ func (s *Image) rasterize(r *rasterizer) {
 	s.imageSizeX = bounds.Max.X - bounds.Min.X
 	s.imageSizeY = bounds.Max.Y - bounds.Min.Y
 
-	// Generate mip maps. for anti aliasing???
+	mipMaps := generateMipMaps(img) // TODO make this at the start once
+	panic(mipMaps)
 
 	// Loop through all the pixels
 	// Then get the coordinate from texture space from screenspace?
@@ -574,6 +614,9 @@ func downSampleBuffer(from []byte, sampleRate int, w, h int) []byte {
 			i := (x/sampleRate + y/sampleRate*targetW) * 4
 			j := (x + y*w) * 4
 
+			if w == 1 {
+				fmt.Println(i, j, w, h, sampleRate, targetW, targetH, "IJ")
+			}
 			target[i] += from[j] / scaleFactor
 			target[i+1] += from[j+1] / scaleFactor
 			target[i+2] += from[j+2] / scaleFactor
@@ -605,7 +648,6 @@ func (r *rasterizer) Draw() {
 
 	if r.sampleRate > 1 { // Anti aliasing
 		r.pixels = downSampleBuffer(r.pixels, r.sampleRate, r.widthPixels, r.heightPixels)
-		//r.resolveBuffer()
 	}
 
 	// Fill points/lines that we aren't antialiaisng on.
@@ -679,8 +721,8 @@ func main() {
 	//r, err := New(canvas, "/svg/test3.svg")
 	//r, err := New(canvas, "/svg/test4.svg")
 	//r, err := New(canvas, "/svg/test5.svg")
-	r, err := New(canvas, "/svg/test6.svg")
-	//r, err := New(canvas, "/svg/test7.svg")
+	//r, err := New(canvas, "/svg/test6.svg")
+	r, err := New(canvas, "/svg/test7.svg")
 
 	if err != nil {
 		panic(err)
