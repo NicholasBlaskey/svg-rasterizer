@@ -149,6 +149,77 @@ type Line struct {
 	Fill string  `xml:"stroke,attr"`
 }
 
+func round(x float32) float32 {
+	return float32(int(x + 0.5))
+}
+
+func fpart(x float32) float32 {
+	return x - float32(int(x))
+}
+
+func rfpart(x float32) float32 {
+	return 1.0 - fpart(x)
+}
+
+// Uses a single strain of Xiaolin since it seems to give the best results.
+// The two strains makes the colors look odd however revisit this after antialiasing.
+// Not sure if the resolution is just too low.
+func (r *rasterizer) drawLine(x0, y0, x1, y1 float32, col Color) {
+	steep := math.Abs(float64(y1-y0)) > math.Abs(float64(x1-x0))
+	if steep {
+		x0, y0 = y0, x0
+		x1, y1 = y1, x1
+	}
+
+	if x0 > x1 {
+		x0, x1 = x1, x0
+		y0, y1 = y1, y0
+	}
+
+	dx := x1 - x0
+	dy := y1 - y0
+	gradient := dy / dx
+	if dx == 0.0 {
+		gradient = 1.0
+	}
+
+	// Handle first endpoint
+	xend := round(x0)
+	yend := y0 + gradient*(xend-x0)
+	xpxl1 := xend // This will be used in the main loop
+	ypxl1 := float32(int(yend))
+	if steep {
+		r.drawPixel(ypxl1, xpxl1, col)
+	} else {
+		r.drawPixel(xpxl1, ypxl1, col)
+	}
+	intery := yend + gradient // first y-intersection for the main loop
+
+	// Handle second endpoint
+	xend = round(x1)
+	yend = y1 + gradient*(xend-x1)
+	xpxl2 := xend // This will be used in the main loop
+	ypxl2 := float32(int(yend))
+	if steep {
+		r.drawPixel(ypxl2, xpxl2, col)
+	} else {
+		r.drawPixel(xpxl2, ypxl2, col)
+	}
+
+	// Main loop
+	if steep {
+		for x := xpxl1 + 1; x <= xpxl2-1; x++ {
+			r.drawPixel(intery, x, col)
+			intery += gradient
+		}
+	} else {
+		for x := xpxl1 + 1; x <= xpxl2-1; x++ {
+			r.drawPixel(x, intery, col)
+			intery += gradient
+		}
+	}
+}
+
 func (s *Line) rasterize(r *rasterizer) {
 	col := parseColor(s.Fill)
 	r.drawLine(s.X1, s.Y1, s.X2, s.Y2, col)
@@ -305,6 +376,9 @@ func (s *Image) rasterize(r *rasterizer) {
 	fmt.Println(s.Href)
 	fmt.Println(r.width, r.height)
 
+	//	mipMaps := generateMipMaps() // TODO make this at the start once
+	panic("BREAK")
+
 	// TODO Remove this
 	s.Width = 128
 	s.Height = s.Width
@@ -339,7 +413,6 @@ func (s *Image) rasterize(r *rasterizer) {
 
 		}
 	}
-
 }
 
 func (s *Image) sampleNearest(img image.Image, x, y float32) (float32, float32, float32, float32) {
@@ -485,35 +558,29 @@ func New(canvas js.Value, filePath string) (*rasterizer, error) {
 		}))
 	r.board = b
 
-	r.sampleRate = 1
+	r.sampleRate = 2
 
 	return r, nil
 }
 
-func (r *rasterizer) resolveBuffer() {
-	upscaled := r.pixels
-	r.pixels = make([]byte, 4*r.widthPixels/r.sampleRate*r.heightPixels/r.sampleRate)
+func downSampleBuffer(from []byte, sampleRate int, w, h int) []byte {
+	targetW := w / sampleRate
+	targetH := h / sampleRate
+	target := make([]byte, targetW*targetH*4)
 
-	getIndex := func(x, y int) int {
-		return (x + r.widthPixels*y) * 4
-	}
+	scaleFactor := byte(sampleRate * sampleRate)
+	for x := 0; x < w; x++ {
+		for y := 0; y < h; y++ {
+			i := (x/sampleRate + y/sampleRate*targetW) * 4
+			j := (x + y*w) * 4
 
-	getIndexPixels := func(x, y int) int {
-		return (x + r.widthPixels/r.sampleRate*y) * 4
-	}
-
-	scaleFactor := byte(r.sampleRate * r.sampleRate)
-	for x := 0; x < r.widthPixels; x++ {
-		for y := 0; y < r.heightPixels; y++ {
-			i := getIndexPixels(x/r.sampleRate, y/r.sampleRate)
-			j := getIndex(x, y)
-
-			r.pixels[i] += upscaled[j] / scaleFactor
-			r.pixels[i+1] += upscaled[j+1] / scaleFactor
-			r.pixels[i+2] += upscaled[j+2] / scaleFactor
-			r.pixels[i+3] += upscaled[j+3] / scaleFactor
+			target[i] += from[j] / scaleFactor
+			target[i+1] += from[j+1] / scaleFactor
+			target[i+2] += from[j+2] / scaleFactor
+			target[i+3] += from[j+3] / scaleFactor
 		}
 	}
+	return target
 }
 
 func (r *rasterizer) Draw() {
@@ -537,7 +604,8 @@ func (r *rasterizer) Draw() {
 	r.svg.rasterize(r)
 
 	if r.sampleRate > 1 { // Anti aliasing
-		r.resolveBuffer()
+		r.pixels = downSampleBuffer(r.pixels, r.sampleRate, r.widthPixels, r.heightPixels)
+		//r.resolveBuffer()
 	}
 
 	// Fill points/lines that we aren't antialiaisng on.
@@ -611,8 +679,8 @@ func main() {
 	//r, err := New(canvas, "/svg/test3.svg")
 	//r, err := New(canvas, "/svg/test4.svg")
 	//r, err := New(canvas, "/svg/test5.svg")
-	//r, err := New(canvas, "/svg/test6.svg")
-	r, err := New(canvas, "/svg/test7.svg")
+	r, err := New(canvas, "/svg/test6.svg")
+	//r, err := New(canvas, "/svg/test7.svg")
 
 	if err != nil {
 		panic(err)
@@ -628,75 +696,4 @@ func main() {
 	fmt.Println("starting", rand.Int31n(256))
 
 	<-make(chan bool) // Prevent program from exiting
-}
-
-func round(x float32) float32 {
-	return float32(int(x + 0.5))
-}
-
-func fpart(x float32) float32 {
-	return x - float32(int(x))
-}
-
-func rfpart(x float32) float32 {
-	return 1.0 - fpart(x)
-}
-
-// Uses a single strain of Xiaolin since it seems to give the best results.
-// The two strains makes the colors look odd however revisit this after antialiasing.
-// Not sure if the resolution is just too low.
-func (r *rasterizer) drawLine(x0, y0, x1, y1 float32, col Color) {
-	steep := math.Abs(float64(y1-y0)) > math.Abs(float64(x1-x0))
-	if steep {
-		x0, y0 = y0, x0
-		x1, y1 = y1, x1
-	}
-
-	if x0 > x1 {
-		x0, x1 = x1, x0
-		y0, y1 = y1, y0
-	}
-
-	dx := x1 - x0
-	dy := y1 - y0
-	gradient := dy / dx
-	if dx == 0.0 {
-		gradient = 1.0
-	}
-
-	// Handle first endpoint
-	xend := round(x0)
-	yend := y0 + gradient*(xend-x0)
-	xpxl1 := xend // This will be used in the main loop
-	ypxl1 := float32(int(yend))
-	if steep {
-		r.drawPixel(ypxl1, xpxl1, col)
-	} else {
-		r.drawPixel(xpxl1, ypxl1, col)
-	}
-	intery := yend + gradient // first y-intersection for the main loop
-
-	// Handle second endpoint
-	xend = round(x1)
-	yend = y1 + gradient*(xend-x1)
-	xpxl2 := xend // This will be used in the main loop
-	ypxl2 := float32(int(yend))
-	if steep {
-		r.drawPixel(ypxl2, xpxl2, col)
-	} else {
-		r.drawPixel(xpxl2, ypxl2, col)
-	}
-
-	// Main loop
-	if steep {
-		for x := xpxl1 + 1; x <= xpxl2-1; x++ {
-			r.drawPixel(intery, x, col)
-			intery += gradient
-		}
-	} else {
-		for x := xpxl1 + 1; x <= xpxl2-1; x++ {
-			r.drawPixel(x, intery, col)
-			intery += gradient
-		}
-	}
 }
