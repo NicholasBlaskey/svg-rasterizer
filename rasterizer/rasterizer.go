@@ -14,7 +14,7 @@ import (
 
 	"encoding/base64"
 	"image"
-	"image/color"
+	//	"image/color"
 	"image/png"
 
 	mgl "github.com/go-gl/mathgl/mgl32"
@@ -378,9 +378,26 @@ type mip struct {
 	data []byte
 }
 
-func (m *mip) At(x, y int) (byte, byte, byte, byte) {
+func (m *mip) At(x, y int) Color {
+	if x < 0 {
+		x = 0
+	}
+	if y < 0 {
+		y = 0
+	}
+	if x >= m.w {
+		x = m.w - 1
+	}
+	if y >= m.h {
+		y = m.h - 1
+	}
+
 	i := (x + y*m.w) * 4
-	return m.data[i], m.data[i+1], m.data[i+2], m.data[i+3]
+
+	return Color{float32(m.data[i]) / 0xFF,
+		float32(m.data[i+1]) / 0xFF,
+		float32(m.data[i+2]) / 0xFF,
+		float32(m.data[i+3]) / 0xFF}
 }
 
 // Must be a power of two image
@@ -438,12 +455,9 @@ func (s *Image) rasterize(r *rasterizer) {
 
 	mipMaps := generateMipMaps(img) // TODO make this at the start once
 
-	for i, m := range mipMaps {
-		fmt.Println(i, m.w, m.h, len(m.data))
-	}
-
-	// TODO Remove this
-	//s.Width = 128
+	// TODO Remove this, if using sampleBilinear on a lower mip this width needs
+	// to also be adjusted.
+	//s.Width = 64
 	//s.Height = s.Width
 
 	// Loop through all the pixels
@@ -451,8 +465,8 @@ func (s *Image) rasterize(r *rasterizer) {
 	// then implmeenet sampleNearest and sampleBiliniear
 	for x := s.X; x < s.X+s.Width; x++ {
 		for y := s.Y; y < s.Y+s.Height; y++ {
-			col := s.sampleNearest(mipMaps[0], float32(x), float32(y))
-			//red, g, b, a := s.sampleBilinear(img, float32(x), float32(y))
+			//col := s.sampleNearest(mipMaps[0], float32(x), float32(y))
+			col := s.sampleBilinear(mipMaps[0], float32(x), float32(y))
 
 			r.drawPixel(float32(x), float32(y), col)
 
@@ -467,26 +481,19 @@ func (s *Image) sampleNearest(img mip, x, y float32) Color {
 	x = x / float32(s.Width) * float32(img.w)
 	y = y / float32(s.Height) * float32(img.h)
 
-	red, g, b, a := img.At(int(x), int(y))
-
-	return Color{float32(red) / 0xFF, float32(g) / 0xFF,
-		float32(b) / 0xFF, float32(a) / 0xFF}
+	return img.At(int(x), int(y))
 }
 
-func blendColor(c0, c1 color.Color, amount float32) color.Color {
-	r0, g0, b0, a0 := c0.RGBA()
-	r1, g1, b1, a1 := c1.RGBA()
-
-	return color.NRGBA64{blend(r0, r1, amount), blend(g0, g1, amount),
-		blend(b0, b1, amount), blend(a0, a1, amount)}
+func blendColor(c0, c1 Color, amount float32) Color {
+	return Color{blend(c0.r, c1.r, amount), blend(c0.g, c1.g, amount),
+		blend(c0.b, c1.b, amount), blend(c0.a, c1.a, amount)}
 }
 
-func blend(x0, x1 uint32, amount float32) uint16 {
-	return uint16((float32(x0)*amount + float32(x1)*(1-amount)))
+func blend(x0, x1, amount float32) float32 {
+	return x0*amount + x1*(1-amount)
 }
 
-/*
-func (s *Image) sampleBilinear(img mip, x, y float32) (float32, float32, float32, float32) {
+func (s *Image) sampleBilinear(img mip, x, y float32) Color {
 	x = x - float32(s.X) + 0.5
 	y = y - float32(s.Y) + 0.5
 	x = x / float32(s.Width) * float32(img.w)
@@ -495,10 +502,6 @@ func (s *Image) sampleBilinear(img mip, x, y float32) (float32, float32, float32
 	tt := x - float32(int(x+0.5)) + 0.5
 	st := y - float32(int(y+0.5)) + 0.5
 
-	//fmt.Printf("(%f, %f), (%f, %f)\n", x, y, tt, st)
-	//	fmt.Printf("(%f, %f) (%f, %f) (%d, %d)\n", x, y, y+1/2.0, y-1/2.0, int(y+1/2.0), int(y-1/2.0))
-	//fmt.Printf("above (%d, %d) (%d, %d)\n", int(x-0.5), int(y-0.5), int(x+0.5), int(y+0.5))
-
 	f00 := img.At(int(x-0.5), int(y+0.5))
 	f01 := img.At(int(x-0.5), int(y-0.5))
 	f10 := img.At(int(x+0.5), int(y+0.5))
@@ -506,14 +509,11 @@ func (s *Image) sampleBilinear(img mip, x, y float32) (float32, float32, float32
 
 	c0 := blendColor(f00, f10, tt)
 	c1 := blendColor(f01, f11, tt)
+
 	c := blendColor(c0, c1, st)
 
-	red, g, b, a := c.RGBA()
-
-	return float32(red) / 0xFFFF, float32(g) / 0xFFFF,
-		float32(b) / 0xFFFF, float32(a) / 0xFFFF
+	return c
 }
-*/
 
 func New(canvas js.Value, filePath string) (*rasterizer, error) {
 	r := &rasterizer{}
