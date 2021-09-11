@@ -90,8 +90,8 @@ type Svg struct {
 	Rects           []Rect    `xml:"rect"`
 	Lines           []Line    `xml:"line"`
 	Polygons        []Polygon `xml:"polygon"`
-	Groups          []Svg     `xml:"g"`
-	Images          []Image   `xml:"image"`
+	Groups          []*Svg    `xml:"g"`
+	Images          []*Image  `xml:"image"`
 	Transform       string    `xml:"transform,attr"`
 	transformMatrix mgl.Mat3
 }
@@ -363,11 +363,12 @@ func (s *Polygon) boundingBoxApproach(r *rasterizer) {
 }
 
 type Image struct {
-	X      int    `xml:"x,attr"`
-	Y      int    `xml:"y,attr"`
-	Width  int    `xml:"width,attr"`
-	Height int    `xml:"height,attr"`
-	Href   string `xml:"href,attr"` // Assume all images of base64 png encoded
+	X       int    `xml:"x,attr"`
+	Y       int    `xml:"y,attr"`
+	Width   int    `xml:"width,attr"`
+	Height  int    `xml:"height,attr"`
+	Href    string `xml:"href,attr"` // Assume all images of base64 png encoded
+	mipMaps []mip
 	//imageSizeX int    // Width of image loaded
 	//imageSizeY int    // Height of image laoded
 }
@@ -433,28 +434,6 @@ func generateMipMaps(img image.Image) []mip {
 }
 
 func (s *Image) rasterize(r *rasterizer) {
-
-	// Load the image.
-	baseImage := strings.Split(s.Href, ",")[1] // Only works for data:image/png;base64,...
-	decoded, err := base64.StdEncoding.DecodeString(baseImage)
-	if err != nil { // Remove this.
-		panic(err)
-	}
-	reader := bytes.NewReader(decoded)
-
-	img, err := png.Decode(reader)
-	if err != nil {
-		panic(err)
-	}
-
-	/*
-		bounds := img.Bounds()
-			s.imageSizeX = bounds.Max.X - bounds.Min.X
-			s.imageSizeY = bounds.Max.Y - bounds.Min.Y
-	*/
-
-	mipMaps := generateMipMaps(img) // TODO make this at the start once
-
 	// TODO Remove this, if using sampleBilinear on a lower mip this width needs
 	// to also be adjusted.
 	//s.Width = 64
@@ -465,11 +444,10 @@ func (s *Image) rasterize(r *rasterizer) {
 	// then implmeenet sampleNearest and sampleBiliniear
 	for x := s.X; x < s.X+s.Width; x++ {
 		for y := s.Y; y < s.Y+s.Height; y++ {
-			//col := s.sampleNearest(mipMaps[0], float32(x), float32(y))
-			col := s.sampleBilinear(mipMaps[0], float32(x), float32(y))
+			col := s.sampleNearest(s.mipMaps[0], float32(x), float32(y))
+			//col := s.sampleBilinear(s.mipMaps[0], float32(x), float32(y))
 
 			r.drawPixel(float32(x), float32(y), col)
-
 		}
 	}
 }
@@ -568,9 +546,36 @@ func New(canvas js.Value, filePath string) (*rasterizer, error) {
 		}))
 	r.board = b
 
+	// Calculate mip maps for all images.
+	loadImagesAndCreateMipMaps(r.svg)
+
 	r.sampleRate = 1
 
 	return r, nil
+}
+
+func loadImagesAndCreateMipMaps(curSvg *Svg) {
+	for _, imgSvg := range curSvg.Images {
+		// Load the image.
+		baseImage := strings.Split(imgSvg.Href, ",")[1] // Only works for data:image/png;base64,...
+		decoded, err := base64.StdEncoding.DecodeString(baseImage)
+		if err != nil { // Remove this.
+			panic(err)
+		}
+		reader := bytes.NewReader(decoded)
+
+		img, err := png.Decode(reader)
+		if err != nil {
+			panic(err)
+		}
+
+		imgSvg.mipMaps = generateMipMaps(img)
+	}
+
+	for _, g := range curSvg.Groups {
+		loadImagesAndCreateMipMaps(g)
+	}
+
 }
 
 func downSampleBuffer(from []byte, sampleRate int, w, h int) []byte {
