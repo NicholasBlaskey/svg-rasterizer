@@ -120,10 +120,40 @@ func (r *rasterizer) drawPoint(x, y float32, col Color) {
 		return
 	}
 
-	r.pixels[(xCoord+yCoord*r.widthPixels)*4] = byte(col.r * 255.0)
-	r.pixels[(xCoord+yCoord*r.widthPixels)*4+1] = byte(col.g * 255.0)
-	r.pixels[(xCoord+yCoord*r.widthPixels)*4+2] = byte(col.b * 255.0)
-	r.pixels[(xCoord+yCoord*r.widthPixels)*4+3] = byte(col.a * 255.0)
+	aPrimeA := float32(r.pixels[(xCoord+yCoord*r.widthPixels)*4+3]) / 0xFF
+	aPrimeR := float32(r.pixels[(xCoord+yCoord*r.widthPixels)*4]) / 0xFF * aPrimeA
+	aPrimeG := float32(r.pixels[(xCoord+yCoord*r.widthPixels)*4+1]) / 0xFF * aPrimeA
+	aPrimeB := float32(r.pixels[(xCoord+yCoord*r.widthPixels)*4+2]) / 0xFF * aPrimeA
+
+	bPrimeR := col.r * col.a
+	bPrimeG := col.g * col.a
+	bPrimeB := col.b * col.a
+	bPrimeA := col.a
+
+	cPrimeR := bPrimeR + (1-bPrimeA)*aPrimeR
+	cPrimeG := bPrimeG + (1-bPrimeA)*aPrimeG
+	cPrimeB := bPrimeB + (1-bPrimeA)*aPrimeB
+	cPrimeA := bPrimeA + (1-bPrimeA)*aPrimeA
+
+	/*
+		fmt.Println("rPixels",
+			r.pixels[(xCoord+yCoord*r.widthPixels)*4],
+			r.pixels[(xCoord+yCoord*r.widthPixels)*4+1],
+			r.pixels[(xCoord+yCoord*r.widthPixels)*4+2],
+			r.pixels[(xCoord+yCoord*r.widthPixels)*4+3],
+		)
+
+		fmt.Println("col", col.r, col.g, col.b, col.a)
+		fmt.Println("a", aPrimeR, aPrimeG, aPrimeB, aPrimeA)
+		fmt.Println("b", bPrimeR, bPrimeG, bPrimeB, bPrimeA)
+		fmt.Println("c", cPrimeR, cPrimeG, cPrimeB, cPrimeA)
+		panic("endl")
+	*/
+
+	r.pixels[(xCoord+yCoord*r.widthPixels)*4] = byte(cPrimeR * 255.0)
+	r.pixels[(xCoord+yCoord*r.widthPixels)*4+1] = byte(cPrimeG * 255.0)
+	r.pixels[(xCoord+yCoord*r.widthPixels)*4+2] = byte(cPrimeB * 255.0)
+	r.pixels[(xCoord+yCoord*r.widthPixels)*4+3] = byte(cPrimeA * 255.0)
 }
 
 // This draws a pixel which will be drawn into the final buffer after everything else
@@ -231,6 +261,7 @@ type Polygon struct {
 	Points          string `xml:"points,attr"`
 	Transform       string `xml:"transform,attr"`
 	transformMatrix mgl.Mat3
+	Opacity         float32 `xml:"fill-opacity,attr"`
 }
 
 func parseTransform(trans string) mgl.Mat3 {
@@ -315,6 +346,7 @@ func (s *Polygon) boundingBoxApproach(r *rasterizer) {
 
 	// Draw each triangle
 	col := parseColor(s.Fill)
+	col.a = s.Opacity
 	for _, t := range triangles {
 		minX := minOfThree(t.X1, t.X2, t.X3)
 		maxX := maxOfThree(t.X1, t.X2, t.X3)
@@ -694,7 +726,13 @@ func main() {
 	//r, err := New(canvas, "/svg/basic/test4.svg")
 	//r, err := New(canvas, "/svg/basic/test5.svg")
 	//r, err := New(canvas, "/svg/basic/test6.svg")
-	r, err := New(canvas, "/svg/basic/test7.svg")
+	//r, err := New(canvas, "/svg/basic/test7.svg")
+
+	r, err := New(canvas, "/svg/alpha/01_prism.svg")
+	//r, err := New(canvas, "/svg/alpha/02_cube.svg")
+	//r, err := New(canvas, "/svg/alpha/03_buckyball.svg")
+	//r, err := New(canvas, "/svg/alpha/04_scotty.svg")
+	//r, err := New(canvas, "/svg/alpha/05_sphere.svg")
 
 	if err != nil {
 		panic(err)
