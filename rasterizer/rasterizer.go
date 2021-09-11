@@ -688,13 +688,13 @@ func main() {
 	document := js.Global().Get("document")
 	canvas := document.Call("getElementById", "webgl")
 
-	//r, err := New(canvas, "/svg/test1.svg")
-	//r, err := New(canvas, "/svg/test2.svg")
-	//r, err := New(canvas, "/svg/test3.svg")
-	//r, err := New(canvas, "/svg/test4.svg")
-	//r, err := New(canvas, "/svg/test5.svg")
-	//r, err := New(canvas, "/svg/test6.svg")
-	r, err := New(canvas, "/svg/test7.svg")
+	//r, err := New(canvas, "/svg/basic/test1.svg")
+	//r, err := New(canvas, "/svg/basic/test2.svg")
+	//r, err := New(canvas, "/svg/basic/test3.svg")
+	//r, err := New(canvas, "/svg/basic/test4.svg")
+	//r, err := New(canvas, "/svg/basic/test5.svg")
+	//r, err := New(canvas, "/svg/basic/test6.svg")
+	r, err := New(canvas, "/svg/basic/test7.svg")
 
 	if err != nil {
 		panic(err)
