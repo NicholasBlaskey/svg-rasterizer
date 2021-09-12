@@ -284,6 +284,21 @@ func parseTransform(trans string) mgl.Mat3 {
 		mat[6], mat[7] = points[4], points[5]
 
 		return mat
+	} else if strings.Contains(trans, "translate") {
+		trans = strings.TrimPrefix(trans, "translate(")
+		trans = strings.Trim(trans, " )\n\t\r")
+		split := strings.Split(trans, " ")
+
+		x, err := strconv.ParseFloat(split[0], 32)
+		if err != nil {
+			panic(err)
+		}
+		y, err := strconv.ParseFloat(split[1], 32)
+		if err != nil {
+			panic(err)
+		}
+
+		return mgl.Translate2D(float32(x), float32(y))
 	}
 	return mgl.Ident3()
 }
@@ -728,8 +743,8 @@ func main() {
 	//r, err := New(canvas, "/svg/basic/test6.svg")
 	//r, err := New(canvas, "/svg/basic/test7.svg")
 
-	r, err := New(canvas, "/svg/alpha/01_prism.svg")
-	//r, err := New(canvas, "/svg/alpha/02_cube.svg")
+	//r, err := New(canvas, "/svg/alpha/01_prism.svg")
+	r, err := New(canvas, "/svg/alpha/02_cube.svg")
 	//r, err := New(canvas, "/svg/alpha/03_buckyball.svg")
 	//r, err := New(canvas, "/svg/alpha/04_scotty.svg")
 	//r, err := New(canvas, "/svg/alpha/05_sphere.svg")
