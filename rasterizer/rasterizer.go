@@ -109,21 +109,11 @@ func (s *Rect) rasterize(r *rasterizer) {
 	r.drawPixel(s.X, s.Y, col)
 }
 
-// This draws a point which will then be anti aliased.
-func (r *rasterizer) drawPoint(x, y float32, col Color) {
-	// TODO is this width and height divide right?
-	xCoord := int(x * float32(r.widthPixels) / r.width)
-	yCoord := r.heightPixels - int(y*float32(r.heightPixels)/r.height)
-
-	if xCoord < 0 || xCoord >= r.widthPixels ||
-		yCoord < 0 || yCoord >= r.heightPixels {
-		return
-	}
-
-	aPrimeA := float32(r.pixels[(xCoord+yCoord*r.widthPixels)*4+3]) / 0xFF
-	aPrimeR := float32(r.pixels[(xCoord+yCoord*r.widthPixels)*4]) / 0xFF * aPrimeA
-	aPrimeG := float32(r.pixels[(xCoord+yCoord*r.widthPixels)*4+1]) / 0xFF * aPrimeA
-	aPrimeB := float32(r.pixels[(xCoord+yCoord*r.widthPixels)*4+2]) / 0xFF * aPrimeA
+func blendColors(col Color, red, g, b, a byte) (byte, byte, byte, byte) {
+	aPrimeA := float32(a) / 0xFF
+	aPrimeR := float32(red) / 0xFF * aPrimeA
+	aPrimeG := float32(g) / 0xFF * aPrimeA
+	aPrimeB := float32(b) / 0xFF * aPrimeA
 
 	bPrimeR := col.r * col.a
 	bPrimeG := col.g * col.a
@@ -135,25 +125,32 @@ func (r *rasterizer) drawPoint(x, y float32, col Color) {
 	cPrimeB := bPrimeB + (1-bPrimeA)*aPrimeB
 	cPrimeA := bPrimeA + (1-bPrimeA)*aPrimeA
 
-	/*
-		fmt.Println("rPixels",
-			r.pixels[(xCoord+yCoord*r.widthPixels)*4],
-			r.pixels[(xCoord+yCoord*r.widthPixels)*4+1],
-			r.pixels[(xCoord+yCoord*r.widthPixels)*4+2],
-			r.pixels[(xCoord+yCoord*r.widthPixels)*4+3],
-		)
+	return byte(cPrimeR * 0xFF), byte(cPrimeG * 0xFF),
+		byte(cPrimeB * 0xFF), byte(cPrimeA * 0xFF)
+}
 
-		fmt.Println("col", col.r, col.g, col.b, col.a)
-		fmt.Println("a", aPrimeR, aPrimeG, aPrimeB, aPrimeA)
-		fmt.Println("b", bPrimeR, bPrimeG, bPrimeB, bPrimeA)
-		fmt.Println("c", cPrimeR, cPrimeG, cPrimeB, cPrimeA)
-		panic("endl")
-	*/
+// This draws a point which will then be anti aliased.
+func (r *rasterizer) drawPoint(x, y float32, col Color) {
+	// TODO is this width and height divide right?
+	xCoord := int(x * float32(r.widthPixels) / r.width)
+	yCoord := r.heightPixels - int(y*float32(r.heightPixels)/r.height)
 
-	r.pixels[(xCoord+yCoord*r.widthPixels)*4] = byte(cPrimeR * 255.0)
-	r.pixels[(xCoord+yCoord*r.widthPixels)*4+1] = byte(cPrimeG * 255.0)
-	r.pixels[(xCoord+yCoord*r.widthPixels)*4+2] = byte(cPrimeB * 255.0)
-	r.pixels[(xCoord+yCoord*r.widthPixels)*4+3] = byte(cPrimeA * 255.0)
+	if xCoord < 0 || xCoord >= r.widthPixels ||
+		yCoord < 0 || yCoord >= r.heightPixels {
+		return
+	}
+
+	red := r.pixels[(xCoord+yCoord*r.widthPixels)*4]
+	g := r.pixels[(xCoord+yCoord*r.widthPixels)*4+1]
+	b := r.pixels[(xCoord+yCoord*r.widthPixels)*4+2]
+	a := r.pixels[(xCoord+yCoord*r.widthPixels)*4+3]
+
+	red, g, b, a = blendColors(col, red, g, b, a)
+
+	r.pixels[(xCoord+yCoord*r.widthPixels)*4] = red //byte(cPrimeR * 255.0)
+	r.pixels[(xCoord+yCoord*r.widthPixels)*4+1] = g //byte(cPrimeG * 255.0)
+	r.pixels[(xCoord+yCoord*r.widthPixels)*4+2] = b // byte(cPrimeB * 255.0)
+	r.pixels[(xCoord+yCoord*r.widthPixels)*4+3] = a // byte(cPrimeA * 255.0)
 }
 
 // This draws a pixel which will be drawn into the final buffer after everything else
@@ -261,7 +258,8 @@ type Polygon struct {
 	Points          string `xml:"points,attr"`
 	Transform       string `xml:"transform,attr"`
 	transformMatrix mgl.Mat3
-	Opacity         float32 `xml:"fill-opacity,attr"`
+	FillOpacity     float32 `xml:"fill-opacity,attr"`
+	StrokeOpacity   float32 `xml:"stroke-opacity,attr"`
 }
 
 func parseTransform(trans string) mgl.Mat3 {
@@ -299,6 +297,21 @@ func parseTransform(trans string) mgl.Mat3 {
 		}
 
 		return mgl.Translate2D(float32(x), float32(y))
+	} else if strings.Contains(trans, "scale(") {
+		trans = strings.TrimPrefix(trans, "scale(")
+		trans = strings.Trim(trans, " )\n\t\r")
+		split := strings.Split(trans, " ")
+
+		x, err := strconv.ParseFloat(split[0], 32)
+		if err != nil {
+			panic(err)
+		}
+		y, err := strconv.ParseFloat(split[1], 32)
+		if err != nil {
+			panic(err)
+		}
+
+		return mgl.Scale2D(float32(x), float32(y))
 	}
 	return mgl.Ident3()
 }
@@ -361,7 +374,11 @@ func (s *Polygon) boundingBoxApproach(r *rasterizer) {
 
 	// Draw each triangle
 	col := parseColor(s.Fill)
-	col.a = s.Opacity
+	col.a = s.FillOpacity
+	if col.a == 0.0 { // Handle missing opacity provided.
+		col.a = 1.0
+	}
+
 	for _, t := range triangles {
 		minX := minOfThree(t.X1, t.X2, t.X3)
 		maxX := maxOfThree(t.X1, t.X2, t.X3)
@@ -382,8 +399,8 @@ func (s *Polygon) boundingBoxApproach(r *rasterizer) {
 				t := crossProduct(vsX1, vsY1, qx, qy) / crossProduct(vsX1, vsY1, vsX2, vsY2)
 
 				if s >= 0 && t >= 0 && s+t <= 1 {
+
 					r.drawPoint(x, y, col)
-					//r.drawPoint(0, 0, red, g, b, a)
 				}
 			}
 		}
@@ -400,13 +417,17 @@ func (s *Polygon) boundingBoxApproach(r *rasterizer) {
 		return
 	}
 	outlineCol := parseColor(s.Stroke)
+	outlineCol.a = s.StrokeOpacity
+	if outlineCol.a == 0.0 {
+		outlineCol.a = 1.0
+	}
+
 	for i := 0; i < len(points); i += 2 {
 		p1X, p1Y := points[i], points[i+1]
 		p2X, p2Y := points[(i+2)%len(points)], points[(i+3)%len(points)]
 		r.drawLine(p1X/float32(r.sampleRate), p1Y/float32(r.sampleRate),
 			p2X/float32(r.sampleRate), p2Y/float32(r.sampleRate), outlineCol)
 	}
-
 }
 
 type Image struct {
@@ -671,10 +692,17 @@ func (r *rasterizer) Draw() {
 
 	// Fill points/lines that we aren't antialiaisng on.
 	for i, point := range r.pointsToFill {
-		r.pixels[point] = byte(r.colorOfPointsToFill[i].r * 255.0)
-		r.pixels[point+1] = byte(r.colorOfPointsToFill[i].g * 255.0)
-		r.pixels[point+2] = byte(r.colorOfPointsToFill[i].b * 255.0)
-		r.pixels[point+3] = byte(r.colorOfPointsToFill[i].a * 255.0)
+		red := r.pixels[point]
+		g := r.pixels[point+1]
+		b := r.pixels[point+2]
+		a := r.pixels[point+3]
+
+		red, g, b, a = blendColors(r.colorOfPointsToFill[i], red, g, b, a)
+
+		r.pixels[point] = red
+		r.pixels[point+1] = g
+		r.pixels[point+2] = b
+		r.pixels[point+3] = a
 	}
 	//fmt.Println(r.pixels)
 	//fmt.Println(len(r.pixels))
@@ -744,10 +772,10 @@ func main() {
 	//r, err := New(canvas, "/svg/basic/test7.svg")
 
 	//r, err := New(canvas, "/svg/alpha/01_prism.svg")
-	r, err := New(canvas, "/svg/alpha/02_cube.svg")
+	//r, err := New(canvas, "/svg/alpha/02_cube.svg")
 	//r, err := New(canvas, "/svg/alpha/03_buckyball.svg")
 	//r, err := New(canvas, "/svg/alpha/04_scotty.svg")
-	//r, err := New(canvas, "/svg/alpha/05_sphere.svg")
+	r, err := New(canvas, "/svg/alpha/05_sphere.svg")
 
 	if err != nil {
 		panic(err)
