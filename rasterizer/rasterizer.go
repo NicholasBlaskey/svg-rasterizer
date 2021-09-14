@@ -296,8 +296,10 @@ func (s *Line) rasterize(r *rasterizer) {
 }
 
 type Polyline struct {
-	Stroke string `xml:"stroke,attr"`
-	Points string `xml:"points,attr"`
+	Stroke          string `xml:"stroke,attr"`
+	Points          string `xml:"points,attr"`
+	Transform       string `xml:"transform,attr"`
+	transformMatrix mgl.Mat3
 }
 
 func (s *Polyline) rasterize(r *rasterizer) {
@@ -315,12 +317,17 @@ func (s *Polyline) rasterize(r *rasterizer) {
 			}
 			panic(err2)
 		}
+
 		pointsFloat = append(pointsFloat, float32(x), float32(y))
 	}
 
+	pointsFloat = r.transform(pointsFloat, s.transformMatrix)
+
 	for i := 0; i < len(pointsFloat)/2-1; i++ {
-		r.drawLine(pointsFloat[i*2], pointsFloat[i*2+1],
-			pointsFloat[(i+1)*2], pointsFloat[(i+1)*2+1], col)
+		r.drawLine(pointsFloat[i*2]/float32(r.sampleRate),
+			pointsFloat[i*2+1]/float32(r.sampleRate),
+			pointsFloat[(i+1)*2]/float32(r.sampleRate),
+			pointsFloat[(i+1)*2+1]/float32(r.sampleRate), col)
 	}
 }
 
@@ -391,7 +398,13 @@ func parseTransform(trans string) mgl.Mat3 {
 func (r *rasterizer) transform(points []float32, trans mgl.Mat3) []float32 {
 	for i := 0; i < len(points); i += 2 {
 		xyz := mgl.Vec3{points[i], points[i+1], 1.0}
+
 		transformed := trans.Mul3x1(xyz)
+
+		if points[i] < 0.0 || points[i+1] < 0 {
+			//fmt.Println(points[i], points[i+1])
+		}
+
 		points[i] = transformed[0] * float32(r.sampleRate)
 		points[i+1] = transformed[1] * float32(r.sampleRate)
 	}
@@ -689,7 +702,7 @@ func New(canvas js.Value, filePath string) (*rasterizer, error) {
 	// Calculate mip maps for all images.
 	loadImagesAndCreateMipMaps(r.svg)
 
-	r.sampleRate = 2
+	r.sampleRate = 1
 
 	return r, nil
 }
@@ -796,6 +809,9 @@ func (s *Svg) rasterize(r *rasterizer) {
 	}
 
 	for _, polyline := range s.Polylines {
+		polyline.transformMatrix = parseTransform(polyline.Transform)
+		polyline.transformMatrix = s.transformMatrix.Mul3(polyline.transformMatrix)
+
 		polyline.rasterize(r)
 	}
 
@@ -860,7 +876,7 @@ func main() {
 	//r, err := New(canvas, "/svg/alpha/04_scotty.svg")
 	//r, err := New(canvas, "/svg/alpha/05_sphere.svg")
 
-	r, err := New(canvas, "/svg/illustration/01_sketchpad.svg")
+	//r, err := New(canvas, "/svg/illustration/01_sketchpad.svg")
 	//r, err := New(canvas, "/svg/illustration/02_hexes.svg")
 	//r, err := New(canvas, "/svg/illustration/03_circle.svg")
 	//r, err := New(canvas, "/svg/illustration/04_sun.svg")
@@ -868,7 +884,7 @@ func main() {
 	//r, err := New(canvas, "/svg/illustration/06_sphere.svg")
 	//r, err := New(canvas, "/svg/illustration/07_lines.svg") // TODO circle?
 	//r, err := New(canvas, "/svg/illustration/08_monkeytree.svg")
-	//r, err := New(canvas, "/svg/illustration/09_kochcurve.svg") // TODO fix error?
+	r, err := New(canvas, "/svg/illustration/09_kochcurve.svg")
 
 	if err != nil {
 		panic(err)
