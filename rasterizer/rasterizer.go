@@ -110,9 +110,6 @@ type Rect struct {
 }
 
 func (s *Rect) rasterize(r *rasterizer) {
-	transformed := r.transform([]float32{s.X, s.Y, s.Width, s.Height}, s.transformMatrix)
-	x, y, w, h := transformed[0], transformed[1], transformed[2], transformed[3]
-
 	col := parseColor(s.Fill)
 	col.a = s.FillOpacity
 	if col.a == 0.0 {
@@ -120,10 +117,16 @@ func (s *Rect) rasterize(r *rasterizer) {
 	}
 
 	// If either width or height is 0 assume we have a single point.
-	if w == 0.0 || h == 0.0 {
-		r.drawPixel(x, y, col)
+	if s.Width == 0.0 || s.Height == 0.0 {
+		r.drawPixel(s.X, s.Y, col)
 		return
 	}
+
+	// Otherwise have a full on rectangle.
+	transformed := r.transform([]float32{s.X, s.Y}, s.transformMatrix)
+	x, y := transformed[0], transformed[1] //, transformed[2], transformed[3]
+	w := s.Width * float32(r.sampleRate)
+	h := s.Height * float32(r.sampleRate)
 
 	// Draw inside of rectangle.
 	for x0 := x; x0 < x+w; x0++ {
