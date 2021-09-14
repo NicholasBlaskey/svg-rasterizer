@@ -84,15 +84,16 @@ type rasterizer struct {
 
 type Svg struct {
 	XMLName         xml.Name
-	Width           string    `xml:"width,attr"`
-	Height          string    `xml:"height,attr"`
-	ViewBox         string    `xml:"viewBox,attr"`
-	Rects           []Rect    `xml:"rect"`
-	Lines           []Line    `xml:"line"`
-	Polygons        []Polygon `xml:"polygon"`
-	Groups          []*Svg    `xml:"g"`
-	Images          []*Image  `xml:"image"`
-	Transform       string    `xml:"transform,attr"`
+	Width           string     `xml:"width,attr"`
+	Height          string     `xml:"height,attr"`
+	ViewBox         string     `xml:"viewBox,attr"`
+	Rects           []Rect     `xml:"rect"`
+	Lines           []Line     `xml:"line"`
+	Polylines       []Polyline `xml:"polyline"`
+	Polygons        []Polygon  `xml:"polygon"`
+	Groups          []*Svg     `xml:"g"`
+	Images          []*Image   `xml:"image"`
+	Transform       string     `xml:"transform,attr"`
 	transformMatrix mgl.Mat3
 }
 
@@ -292,6 +293,35 @@ func (r *rasterizer) drawLine(x0, y0, x1, y1 float32, col Color) {
 func (s *Line) rasterize(r *rasterizer) {
 	col := parseColor(s.Fill)
 	r.drawLine(s.X1, s.Y1, s.X2, s.Y2, col)
+}
+
+type Polyline struct {
+	Stroke string `xml:"stroke,attr"`
+	Points string `xml:"points,attr"`
+}
+
+func (s *Polyline) rasterize(r *rasterizer) {
+	col := parseColor(s.Stroke)
+
+	pointsFloat := []float32{}
+	points := strings.Split(strings.Trim(s.Points, " \n\r\t"), " ")
+	for _, p := range points {
+		xy := strings.Split(strings.Trim(p, "\n\r\t "), ",")
+		x, err1 := strconv.ParseFloat(xy[0], 32)
+		y, err2 := strconv.ParseFloat(xy[1], 32)
+		if err1 != nil || err2 != nil { // TODO figure out error handling
+			if err1 != nil {
+				panic(err1)
+			}
+			panic(err2)
+		}
+		pointsFloat = append(pointsFloat, float32(x), float32(y))
+	}
+
+	for i := 0; i < len(pointsFloat)/2-1; i++ {
+		r.drawLine(pointsFloat[i*2], pointsFloat[i*2+1],
+			pointsFloat[(i+1)*2], pointsFloat[(i+1)*2+1], col)
+	}
 }
 
 type Polygon struct {
@@ -764,15 +794,22 @@ func (s *Svg) rasterize(r *rasterizer) {
 
 		rect.rasterize(r)
 	}
+
+	for _, polyline := range s.Polylines {
+		polyline.rasterize(r)
+	}
+
 	for _, line := range s.Lines {
 		line.rasterize(r)
 	}
+
 	for _, polygon := range s.Polygons {
 		polygon.transformMatrix = parseTransform(polygon.Transform)
 		polygon.transformMatrix = s.transformMatrix.Mul3(polygon.transformMatrix)
 
 		polygon.rasterize(r)
 	}
+
 	for _, group := range s.Groups {
 		// Set transformation matrix for the group.
 		group.transformMatrix = parseTransform(group.Transform)
@@ -780,6 +817,7 @@ func (s *Svg) rasterize(r *rasterizer) {
 
 		group.rasterize(r)
 	}
+
 	for _, image := range s.Images {
 		image.rasterize(r)
 	}
@@ -822,15 +860,15 @@ func main() {
 	//r, err := New(canvas, "/svg/alpha/04_scotty.svg")
 	//r, err := New(canvas, "/svg/alpha/05_sphere.svg")
 
-	//r, err := New(canvas, "/svg/illustration/01_sketchpad.svg") // TODO fix polyline
+	r, err := New(canvas, "/svg/illustration/01_sketchpad.svg")
 	//r, err := New(canvas, "/svg/illustration/02_hexes.svg")
 	//r, err := New(canvas, "/svg/illustration/03_circle.svg")
 	//r, err := New(canvas, "/svg/illustration/04_sun.svg")
-	r, err := New(canvas, "/svg/illustration/05_lion.svg")
+	//r, err := New(canvas, "/svg/illustration/05_lion.svg")
 	//r, err := New(canvas, "/svg/illustration/06_sphere.svg")
 	//r, err := New(canvas, "/svg/illustration/07_lines.svg") // TODO circle?
-	//r, err := New(canvas, "/svg/illustration/08_monkeytree.svg") // TODO polyline?
-	//r, err := New(canvas, "/svg/illustration/09_kochcurve.svg") // TODO polyline?
+	//r, err := New(canvas, "/svg/illustration/08_monkeytree.svg")
+	//r, err := New(canvas, "/svg/illustration/09_kochcurve.svg") // TODO fix error?
 
 	if err != nil {
 		panic(err)
