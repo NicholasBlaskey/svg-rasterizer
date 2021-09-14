@@ -97,16 +97,55 @@ type Svg struct {
 }
 
 type Rect struct {
-	X      float32 `xml:"x,attr"`
-	Y      float32 `xml:"y,attr"`
-	Fill   string  `xml:"fill,attr"`
-	Width  float32 `xml:"width,attr"`
-	Height float32 `xml:"height,attr"`
+	X               float32 `xml:"x,attr"`
+	Y               float32 `xml:"y,attr"`
+	Fill            string  `xml:"fill,attr"`
+	Stroke          string  `xml:"stroke,attr"`
+	Width           float32 `xml:"width,attr"`
+	Height          float32 `xml:"height,attr"`
+	StrokeOpacity   float32 `xml:"stroke-opacityt,attr"`
+	FillOpacity     float32 `xml:"fill-opacity,attr"`
+	Transform       string  `xml:"transform,attr"`
+	transformMatrix mgl.Mat3
 }
 
 func (s *Rect) rasterize(r *rasterizer) {
+	transformed := r.transform([]float32{s.X, s.Y, s.Width, s.Height}, s.transformMatrix)
+	x, y, w, h := transformed[0], transformed[1], transformed[2], transformed[3]
+
 	col := parseColor(s.Fill)
-	r.drawPixel(s.X, s.Y, col)
+	col.a = s.FillOpacity
+	if col.a == 0.0 {
+		col.a = 1.0
+	}
+
+	// If either width or height is 0 assume we have a single point.
+	if w == 0.0 || h == 0.0 {
+		r.drawPixel(x, y, col)
+		return
+	}
+
+	// Draw inside of rectangle.
+	for x0 := x; x0 < x+w; x0++ {
+		for y0 := y; y0 < y+h; y0++ {
+			r.drawPoint(x0, y0, col)
+		}
+	}
+
+	// Draw rectangle border.
+	outlineCol := parseColor(s.Stroke)
+	col.a = s.StrokeOpacity
+	if col.a == 0.0 {
+		col.a = 1.0
+	}
+	for i := float32(0); i < w; i++ {
+		r.drawPixel(x+i, y+1.0, outlineCol)
+		r.drawPixel(x+i, y+float32(s.Height)-1, outlineCol)
+	}
+	for i := float32(0); i < h; i++ {
+		r.drawPixel(x+0, y+i, outlineCol)
+		r.drawPixel(x+float32(s.Width)-1, y+i, outlineCol)
+	}
 }
 
 func blendColors(col Color, red, g, b, a byte) (byte, byte, byte, byte) {
@@ -147,10 +186,10 @@ func (r *rasterizer) drawPoint(x, y float32, col Color) {
 
 	red, g, b, a = blendColors(col, red, g, b, a)
 
-	r.pixels[(xCoord+yCoord*r.widthPixels)*4] = red //byte(cPrimeR * 255.0)
-	r.pixels[(xCoord+yCoord*r.widthPixels)*4+1] = g //byte(cPrimeG * 255.0)
-	r.pixels[(xCoord+yCoord*r.widthPixels)*4+2] = b // byte(cPrimeB * 255.0)
-	r.pixels[(xCoord+yCoord*r.widthPixels)*4+3] = a // byte(cPrimeA * 255.0)
+	r.pixels[(xCoord+yCoord*r.widthPixels)*4] = red
+	r.pixels[(xCoord+yCoord*r.widthPixels)*4+1] = g
+	r.pixels[(xCoord+yCoord*r.widthPixels)*4+2] = b
+	r.pixels[(xCoord+yCoord*r.widthPixels)*4+3] = a
 }
 
 // This draws a pixel which will be drawn into the final buffer after everything else
@@ -617,7 +656,7 @@ func New(canvas js.Value, filePath string) (*rasterizer, error) {
 	// Calculate mip maps for all images.
 	loadImagesAndCreateMipMaps(r.svg)
 
-	r.sampleRate = 1
+	r.sampleRate = 2
 
 	return r, nil
 }
@@ -717,6 +756,9 @@ func (s *Svg) rasterize(r *rasterizer) {
 	//fmt.Println("svg transform", r.svg.transformMatrix)
 
 	for _, rect := range s.Rects {
+		rect.transformMatrix = parseTransform(rect.Transform)
+		rect.transformMatrix = s.transformMatrix.Mul3(rect.transformMatrix)
+
 		rect.rasterize(r)
 	}
 	for _, line := range s.Lines {
@@ -775,7 +817,17 @@ func main() {
 	//r, err := New(canvas, "/svg/alpha/02_cube.svg")
 	//r, err := New(canvas, "/svg/alpha/03_buckyball.svg")
 	//r, err := New(canvas, "/svg/alpha/04_scotty.svg")
-	r, err := New(canvas, "/svg/alpha/05_sphere.svg")
+	//r, err := New(canvas, "/svg/alpha/05_sphere.svg")
+
+	//r, err := New(canvas, "/svg/illustration/01_sketchpad.svg") // TODO fix polyline
+	//r, err := New(canvas, "/svg/illustration/02_hexes.svg")
+	//r, err := New(canvas, "/svg/illustration/03_circle.svg")
+	//r, err := New(canvas, "/svg/illustration/04_sun.svg")
+	r, err := New(canvas, "/svg/illustration/05_lion.svg")
+	//r, err := New(canvas, "/svg/illustration/06_sphere.svg")
+	//r, err := New(canvas, "/svg/illustration/07_lines.svg") // TODO circle?
+	//r, err := New(canvas, "/svg/illustration/08_monkeytree.svg") // TODO polyline?
+	//r, err := New(canvas, "/svg/illustration/09_kochcurve.svg") // TODO polyline?
 
 	if err != nil {
 		panic(err)
