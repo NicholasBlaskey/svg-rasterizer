@@ -428,10 +428,6 @@ func (r *rasterizer) transform(points []float32, trans mgl.Mat3) []float32 {
 
 		transformed := trans.Mul3x1(xyz)
 
-		if points[i] < 0.0 || points[i+1] < 0 {
-			//fmt.Println(points[i], points[i+1])
-		}
-
 		points[i] = transformed[0] * float32(r.sampleRate)
 		points[i+1] = transformed[1] * float32(r.sampleRate)
 	}
@@ -516,12 +512,6 @@ func (s *Polygon) boundingBoxApproach(r *rasterizer) {
 				}
 			}
 		}
-
-		/*
-			r.drawLine(t.X1, t.Y1, t.X2, t.Y2, 0, 0, 0, 255)
-			r.drawLine(t.X2, t.Y2, t.X3, t.Y3, 0, 0, 0, 255)
-			r.drawLine(t.X3, t.Y3, t.X1, t.Y1, 0, 0, 0, 255)
-		*/
 	}
 
 	// Draw the outline if it exists.
@@ -913,9 +903,12 @@ func main() {
 	//r, err := New(canvas, "/svg/illustration/04_sun.svg")
 	//r, err := New(canvas, "/svg/illustration/05_lion.svg")
 	//r, err := New(canvas, "/svg/illustration/06_sphere.svg")
-	r, err := New(canvas, "/svg/illustration/07_lines.svg") // TODO circle?
+	//r, err := New(canvas, "/svg/illustration/07_lines.svg")
 	//r, err := New(canvas, "/svg/illustration/08_monkeytree.svg")
 	//r, err := New(canvas, "/svg/illustration/09_kochcurve.svg")
+
+	r, err := New(canvas, "/svg/hardcore/01_degenerate_square1.svg")
+	//r, err := New(canvas, "/svg/hardcore/02_degenerate_square2.svg")
 
 	if err != nil {
 		panic(err)
