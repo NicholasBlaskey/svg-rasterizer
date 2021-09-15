@@ -340,22 +340,18 @@ type Circle struct {
 }
 
 func (s *Circle) rasterize(r *rasterizer) {
-	/*
-		cx := s.Cx * float32(r.sampleRate)
-		cy := s.Cy * float32(r.sampleRate)
-		r := s.R * float32(r.sampleRate)
-	*/
+	cx := s.Cx * float32(r.sampleRate)
+	cy := s.Cy * float32(r.sampleRate)
+	radius := s.R * float32(r.sampleRate)
 
 	col := parseColor(s.Fill)
-	minX, maxX := s.Cx-s.R, s.Cx+s.R
-	minY, maxY := s.Cy-s.R, s.Cy+s.R
+	minX, maxX := cx-radius, cx+radius
+	minY, maxY := cy-radius, cy+radius
 
 	for x := float32(int(minX)); x <= maxX; x++ {
 		for y := float32(int(minY)); y <= maxY; y++ {
-			// Compute distance... you know sqrt(...)
-			dx, dy := s.Cx-x, s.Cy-y
-
-			if float32(math.Sqrt(float64(dx*dx+dy*dy))) <= s.R {
+			dx, dy := cx-x, cy-y
+			if float32(math.Sqrt(float64(dx*dx+dy*dy))) <= radius {
 				r.drawPoint(x, y, col)
 			}
 		}
@@ -733,7 +729,7 @@ func New(canvas js.Value, filePath string) (*rasterizer, error) {
 	// Calculate mip maps for all images.
 	loadImagesAndCreateMipMaps(r.svg)
 
-	r.sampleRate = 1
+	r.sampleRate = 2
 
 	return r, nil
 }
