@@ -44,7 +44,7 @@ func crossProduct(x1, y1, x2, y2 float32) float32 {
 
 func parseColor(col string) Color {
 	if len(col) == 0 {
-		return Color{0, 0, 0, 0}
+		return Color{0, 0, 0, 1.0}
 	}
 
 	if len(col) == 6 { // Add in # if missing
@@ -91,6 +91,7 @@ type Svg struct {
 	Lines           []Line     `xml:"line"`
 	Polylines       []Polyline `xml:"polyline"`
 	Polygons        []Polygon  `xml:"polygon"`
+	Circles         []Circle   `xml:"circle"`
 	Groups          []*Svg     `xml:"g"`
 	Images          []*Image   `xml:"image"`
 	Transform       string     `xml:"transform,attr"`
@@ -328,6 +329,36 @@ func (s *Polyline) rasterize(r *rasterizer) {
 			pointsFloat[i*2+1]/float32(r.sampleRate),
 			pointsFloat[(i+1)*2]/float32(r.sampleRate),
 			pointsFloat[(i+1)*2+1]/float32(r.sampleRate), col)
+	}
+}
+
+type Circle struct {
+	Cx   float32 `xml:"cx,attr"`
+	Cy   float32 `xml:"cy,attr"`
+	R    float32 `xml:"r,attr"`
+	Fill string  `xml:'fill,attr"`
+}
+
+func (s *Circle) rasterize(r *rasterizer) {
+	/*
+		cx := s.Cx * float32(r.sampleRate)
+		cy := s.Cy * float32(r.sampleRate)
+		r := s.R * float32(r.sampleRate)
+	*/
+
+	col := parseColor(s.Fill)
+	minX, maxX := s.Cx-s.R, s.Cx+s.R
+	minY, maxY := s.Cy-s.R, s.Cy+s.R
+
+	for x := float32(int(minX)); x <= maxX; x++ {
+		for y := float32(int(minY)); y <= maxY; y++ {
+			// Compute distance... you know sqrt(...)
+			dx, dy := s.Cx-x, s.Cy-y
+
+			if float32(math.Sqrt(float64(dx*dx+dy*dy))) <= s.R {
+				r.drawPoint(x, y, col)
+			}
+		}
 	}
 }
 
@@ -819,6 +850,10 @@ func (s *Svg) rasterize(r *rasterizer) {
 		line.rasterize(r)
 	}
 
+	for _, circle := range s.Circles {
+		circle.rasterize(r)
+	}
+
 	for _, polygon := range s.Polygons {
 		polygon.transformMatrix = parseTransform(polygon.Transform)
 		polygon.transformMatrix = s.transformMatrix.Mul3(polygon.transformMatrix)
@@ -882,9 +917,9 @@ func main() {
 	//r, err := New(canvas, "/svg/illustration/04_sun.svg")
 	//r, err := New(canvas, "/svg/illustration/05_lion.svg")
 	//r, err := New(canvas, "/svg/illustration/06_sphere.svg")
-	//r, err := New(canvas, "/svg/illustration/07_lines.svg") // TODO circle?
+	r, err := New(canvas, "/svg/illustration/07_lines.svg") // TODO circle?
 	//r, err := New(canvas, "/svg/illustration/08_monkeytree.svg")
-	r, err := New(canvas, "/svg/illustration/09_kochcurve.svg")
+	//r, err := New(canvas, "/svg/illustration/09_kochcurve.svg")
 
 	if err != nil {
 		panic(err)
