@@ -80,6 +80,7 @@ type rasterizer struct {
 	origHeight          float32
 	pointsToFill        []int
 	colorOfPointsToFill []Color
+	canvas              js.Value
 }
 
 type Svg struct {
@@ -665,46 +666,16 @@ func (s *Image) sampleBilinear(img mip, x, y float32) Color {
 
 func New(canvas js.Value, filePath string) (*rasterizer, error) {
 	r := &rasterizer{}
-
-	// Get xml file and parse it.
-	fileString := getFile(filePath)
-
-	buf := bytes.NewBuffer([]byte(fileString))
-	dec := xml.NewDecoder(buf)
-
-	var svg Svg
-	if err := dec.Decode(&svg); err != nil {
-		return nil, err
-	}
-	r.svg = &svg
-
-	// TODO Calculate needed drawing info.
-	// This is probaly very wrong. However keep going and revise
-	// this to keep handling more test cases.
-	width, _ := strconv.ParseFloat(strings.Split(svg.Width, "px")[0], 64)
-	height, _ := strconv.ParseFloat(strings.Split(svg.Height, "px")[0], 64)
-
-	if svg.ViewBox != "" { // Does not have a viewbox
-		viewBox := strings.Split(svg.ViewBox, " ")
-		widthPixels, _ := strconv.ParseFloat(viewBox[2], 64)
-		heightPixels, _ := strconv.ParseFloat(viewBox[3], 64)
-		r.widthPixels = int(widthPixels)
-		r.heightPixels = int(heightPixels)
-	} else {
-		r.widthPixels, r.heightPixels = int(width), int(height)
-	}
-
-	r.width = float32(width)
-	r.height = float32(height)
-
-	// Create board.
-	canvas.Set("width", r.widthPixels)
-	canvas.Set("height", r.heightPixels)
 	b, err := board.New(canvas)
 	if err != nil {
 		panic(err)
 	}
+	r.board = b
+	r.canvas = canvas
 
+	r.SetSvg(filePath)
+
+	// Set key listeners.
 	pixelInspectorOn := false
 	js.Global().Call("addEventListener", "keydown", js.FuncOf(
 		func(this js.Value, args []js.Value) interface{} {
@@ -714,14 +685,48 @@ func New(canvas js.Value, filePath string) (*rasterizer, error) {
 			}
 			return nil
 		}))
-	r.board = b
+
+	return r, nil
+}
+
+func (r *rasterizer) SetSvg(filePath string) error {
+	// Get xml file and parse it.
+	fileString := getFile(filePath)
+
+	buf := bytes.NewBuffer([]byte(fileString))
+	dec := xml.NewDecoder(buf)
+
+	var svg Svg
+	if err := dec.Decode(&svg); err != nil {
+		return err
+	}
+	r.svg = &svg
+
+	// Get drawing infomation
+	width, _ := strconv.ParseFloat(strings.Split(svg.Width, "px")[0], 64)
+	height, _ := strconv.ParseFloat(strings.Split(svg.Height, "px")[0], 64)
+	if svg.ViewBox != "" { // Does not have a viewbox
+		viewBox := strings.Split(svg.ViewBox, " ")
+		widthPixels, _ := strconv.ParseFloat(viewBox[2], 64)
+		heightPixels, _ := strconv.ParseFloat(viewBox[3], 64)
+		r.widthPixels = int(widthPixels)
+		r.heightPixels = int(heightPixels)
+	} else {
+		r.widthPixels, r.heightPixels = int(width), int(height)
+	}
+	r.width = float32(width)
+	r.height = float32(height)
+
+	// Create board.
+	r.canvas.Set("width", r.widthPixels)
+	r.canvas.Set("height", r.heightPixels)
 
 	// Calculate mip maps for all images.
 	loadImagesAndCreateMipMaps(r.svg)
 
-	r.sampleRate = 2
+	r.sampleRate = 1
 
-	return r, nil
+	return nil
 }
 
 func loadImagesAndCreateMipMaps(curSvg *Svg) {
@@ -818,6 +823,8 @@ func (r *rasterizer) Draw() {
 func (s *Svg) rasterize(r *rasterizer) {
 	//fmt.Println("svg transform", r.svg.transformMatrix)
 
+	fmt.Println(r.width, r.height, r.heightPixels, r.widthPixels)
+
 	for _, rect := range s.Rects {
 		rect.transformMatrix = parseTransform(rect.Transform)
 		rect.transformMatrix = s.transformMatrix.Mul3(rect.transformMatrix)
@@ -826,6 +833,7 @@ func (s *Svg) rasterize(r *rasterizer) {
 	}
 
 	for _, polyline := range s.Polylines {
+
 		polyline.transformMatrix = parseTransform(polyline.Transform)
 		polyline.transformMatrix = s.transformMatrix.Mul3(polyline.transformMatrix)
 
@@ -897,7 +905,7 @@ func main() {
 	//r, err := New(canvas, "/svg/alpha/04_scotty.svg")
 	//r, err := New(canvas, "/svg/alpha/05_sphere.svg")
 
-	//r, err := New(canvas, "/svg/illustration/01_sketchpad.svg")
+	r, err := New(canvas, "/svg/illustration/01_sketchpad.svg")
 	//r, err := New(canvas, "/svg/illustration/02_hexes.svg")
 	//r, err := New(canvas, "/svg/illustration/03_circle.svg")
 	//r, err := New(canvas, "/svg/illustration/04_sun.svg")
@@ -907,8 +915,10 @@ func main() {
 	//r, err := New(canvas, "/svg/illustration/08_monkeytree.svg")
 	//r, err := New(canvas, "/svg/illustration/09_kochcurve.svg")
 
-	r, err := New(canvas, "/svg/hardcore/01_degenerate_square1.svg")
+	//r, err := New(canvas, "/svg/hardcore/01_degenerate_square1.svg")
 	//r, err := New(canvas, "/svg/hardcore/02_degenerate_square2.svg")
+
+	//r.SetSvg("/svg/illustration/01_sketchpad.svg")
 
 	if err != nil {
 		panic(err)
