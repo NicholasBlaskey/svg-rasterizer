@@ -677,12 +677,27 @@ func New(canvas js.Value, filePath string) (*rasterizer, error) {
 	r.SetSvg(filePath)
 
 	pixelInspectorOn := false
+
+	onSwitch := true // TODO REMOVE
 	js.Global().Call("addEventListener", "keydown", js.FuncOf(
 		func(this js.Value, args []js.Value) interface{} {
-			if args[0].Get("keyCode").Int() == 90 { // z
+			if args[0].Get("key").String() == "z" {
 				pixelInspectorOn = !pixelInspectorOn
 				b.EnablePixelInspector(pixelInspectorOn)
 			}
+
+			// TODO REMOVE
+			if args[0].Get("key").String() == "r" {
+				fmt.Println("ON?")
+				onSwitch = !onSwitch
+				if onSwitch {
+					go r.SetSvg("/svg/illustration/07_lines.svg")
+				} else {
+					go r.SetSvg("/svg/illustration/05_lion.svg")
+				}
+			}
+			// TODO REMOVE
+
 			return nil
 		}))
 
@@ -726,6 +741,8 @@ func (r *rasterizer) SetSvg(filePath string) error {
 	loadImagesAndCreateMipMaps(r.svg)
 
 	r.sampleRate = 2
+
+	r.Draw()
 
 	return nil
 }
@@ -779,6 +796,7 @@ func (r *rasterizer) Draw() {
 	r.origWidth, r.origHeight = r.width, r.height
 
 	r.pointsToFill = []int{}
+	r.colorOfPointsToFill = []Color{}
 
 	r.widthPixels *= r.sampleRate
 	r.heightPixels *= r.sampleRate
@@ -925,12 +943,11 @@ func main() {
 		panic(err)
 	}
 
+	_ = r
 	/*
 		canvas.Set("height", 900)
 		canvas.Set("width", 900)
 	*/
-
-	r.Draw()
 
 	fmt.Println("starting", rand.Int31n(256))
 
