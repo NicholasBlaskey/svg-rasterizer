@@ -1,6 +1,8 @@
 package board
 
 import (
+	"fmt"
+
 	"github.com/nicholasblaskey/webgl/webgl"
 	"syscall/js"
 
@@ -75,6 +77,12 @@ func New(canvas js.Value) (*Board, error) {
 	return b, nil
 }
 
+func (b *Board) SetWidthHeight(w, h int) {
+	b.Width, b.Height = w, h
+	b.initTexCoords()
+	b.initPixelInspectorOffsets()
+}
+
 func (b *Board) EnablePixelInspector(shouldTurnOn bool) {
 	b.pixelInspectorOn = shouldTurnOn
 	b.draw()
@@ -82,10 +90,11 @@ func (b *Board) EnablePixelInspector(shouldTurnOn bool) {
 
 func (b *Board) initPixelInspector() {
 	// Always have the pixel inspector on and listening
-	texelSizeX := 1.0 / float32(b.Width)
-	texelSizeY := 1.0 / float32(b.Height)
 	b.canvas.Call("addEventListener", "mousemove",
 		js.FuncOf(func(this js.Value, args []js.Value) interface{} {
+			texelSizeX := 1.0 / float32(b.Width)
+			texelSizeY := 1.0 / float32(b.Height)
+
 			x, y := getXAndYFromEvent(args[0])
 			b.mouseX, b.mouseY = x, y
 
@@ -103,9 +112,15 @@ func (b *Board) initPixelInspector() {
 }
 
 func (b *Board) initPixelInspectorOffsets() {
+	if b.offsetsBuff != nil {
+		b.gl.DeleteBuffer(b.offsetsBuff.WebGlBuffer)
+	}
+
 	b.offsets = []float32{}
 	texelSizeX, texelSizeY := 1.0/float32(b.Width), 1.0/float32(b.Height)
 	centerX, centerY := b.numSquares/2, b.numSquares/2
+
+	fmt.Println(texelSizeX, texelSizeY, b.Width, b.Height)
 
 	for y := 0; y < b.numSquares; y++ {
 		for x := 0; x < b.numSquares; x++ {
@@ -288,6 +303,10 @@ func (b *Board) initShaders() error {
 }
 
 func (b *Board) initTexture() {
+	if b.texture != nil {
+		b.gl.DeleteTexture(b.texture)
+	}
+
 	b.texture = b.gl.CreateTexture()
 	b.gl.ActiveTexture(webgl.TEXTURE0)
 	b.gl.BindTexture(webgl.TEXTURE_2D, b.texture)
