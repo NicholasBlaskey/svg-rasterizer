@@ -668,15 +668,23 @@ func New(canvas js.Value, filePath string) (*rasterizer, error) {
 	r := &rasterizer{}
 	r.canvas = canvas
 
-	/*
-		b, err := board.New(r.canvas)
-		if err != nil {
-			panic(err)
-		}
-		r.board = b
-	*/
+	b, err := board.New(r.canvas)
+	if err != nil {
+		panic(err)
+	}
+	r.board = b
 
 	r.SetSvg(filePath)
+
+	pixelInspectorOn := false
+	js.Global().Call("addEventListener", "keydown", js.FuncOf(
+		func(this js.Value, args []js.Value) interface{} {
+			if args[0].Get("keyCode").Int() == 90 { // z
+				pixelInspectorOn = !pixelInspectorOn
+				b.EnablePixelInspector(pixelInspectorOn)
+			}
+			return nil
+		}))
 
 	return r, nil
 }
@@ -709,25 +717,10 @@ func (r *rasterizer) SetSvg(filePath string) error {
 	r.width = float32(width)
 	r.height = float32(height)
 
-	// Create board.
+	// Update board.
+	r.board.SetWidthHeight(r.widthPixels, r.heightPixels)
 	r.canvas.Set("width", r.widthPixels)
 	r.canvas.Set("height", r.heightPixels)
-	b, err := board.New(r.canvas)
-	if err != nil {
-		panic(err)
-	}
-	r.board = b
-
-	pixelInspectorOn := false
-	js.Global().Call("addEventListener", "keydown", js.FuncOf(
-		func(this js.Value, args []js.Value) interface{} {
-			if args[0].Get("keyCode").Int() == 90 { // z
-				pixelInspectorOn = !pixelInspectorOn
-				b.EnablePixelInspector(pixelInspectorOn)
-			}
-			return nil
-		}))
-	r.board = b
 
 	// Calculate mip maps for all images.
 	loadImagesAndCreateMipMaps(r.svg)
