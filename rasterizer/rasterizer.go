@@ -666,25 +666,17 @@ func (s *Image) sampleBilinear(img mip, x, y float32) Color {
 
 func New(canvas js.Value, filePath string) (*rasterizer, error) {
 	r := &rasterizer{}
-	b, err := board.New(canvas)
-	if err != nil {
-		panic(err)
-	}
-	r.board = b
 	r.canvas = canvas
 
-	r.SetSvg(filePath)
+	/*
+		b, err := board.New(r.canvas)
+		if err != nil {
+			panic(err)
+		}
+		r.board = b
+	*/
 
-	// Set key listeners.
-	pixelInspectorOn := false
-	js.Global().Call("addEventListener", "keydown", js.FuncOf(
-		func(this js.Value, args []js.Value) interface{} {
-			if args[0].Get("keyCode").Int() == 90 { // z
-				pixelInspectorOn = !pixelInspectorOn
-				b.EnablePixelInspector(pixelInspectorOn)
-			}
-			return nil
-		}))
+	r.SetSvg(filePath)
 
 	return r, nil
 }
@@ -692,19 +684,18 @@ func New(canvas js.Value, filePath string) (*rasterizer, error) {
 func (r *rasterizer) SetSvg(filePath string) error {
 	// Get xml file and parse it.
 	fileString := getFile(filePath)
-
 	buf := bytes.NewBuffer([]byte(fileString))
 	dec := xml.NewDecoder(buf)
-
 	var svg Svg
 	if err := dec.Decode(&svg); err != nil {
 		return err
 	}
 	r.svg = &svg
 
-	// Get drawing infomation
+	// Calculate drawing info.
 	width, _ := strconv.ParseFloat(strings.Split(svg.Width, "px")[0], 64)
 	height, _ := strconv.ParseFloat(strings.Split(svg.Height, "px")[0], 64)
+
 	if svg.ViewBox != "" { // Does not have a viewbox
 		viewBox := strings.Split(svg.ViewBox, " ")
 		widthPixels, _ := strconv.ParseFloat(viewBox[2], 64)
@@ -714,17 +705,34 @@ func (r *rasterizer) SetSvg(filePath string) error {
 	} else {
 		r.widthPixels, r.heightPixels = int(width), int(height)
 	}
+
 	r.width = float32(width)
 	r.height = float32(height)
 
 	// Create board.
 	r.canvas.Set("width", r.widthPixels)
 	r.canvas.Set("height", r.heightPixels)
+	b, err := board.New(r.canvas)
+	if err != nil {
+		panic(err)
+	}
+	r.board = b
+
+	pixelInspectorOn := false
+	js.Global().Call("addEventListener", "keydown", js.FuncOf(
+		func(this js.Value, args []js.Value) interface{} {
+			if args[0].Get("keyCode").Int() == 90 { // z
+				pixelInspectorOn = !pixelInspectorOn
+				b.EnablePixelInspector(pixelInspectorOn)
+			}
+			return nil
+		}))
+	r.board = b
 
 	// Calculate mip maps for all images.
 	loadImagesAndCreateMipMaps(r.svg)
 
-	r.sampleRate = 1
+	r.sampleRate = 2
 
 	return nil
 }
