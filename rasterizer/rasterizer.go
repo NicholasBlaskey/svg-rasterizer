@@ -906,6 +906,12 @@ func getFile(filePath string) string {
 	return strings.ReplaceAll(s, "\r", "")
 }
 
+func createGui() {
+	gui := js.Global().Get("dat").Get("GUI").New()
+
+	fmt.Println("ONLOAD", gui)
+}
+
 func main() {
 	document := js.Global().Get("document")
 	canvas := document.Call("getElementById", "webgl")
@@ -938,6 +944,8 @@ func main() {
 	//r, err := New(canvas, "/svg/hardcore/02_degenerate_square2.svg")
 
 	//r.SetSvg("/svg/illustration/01_sketchpad.svg")
+
+	createGui()
 
 	if err != nil {
 		panic(err)
