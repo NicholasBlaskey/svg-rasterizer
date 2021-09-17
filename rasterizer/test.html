@@ -4,6 +4,7 @@
     <script src="./dat.gui.min.js"></script>        
     <script src="../wasm_exec.js"></script>
     <script>
+      let x = {};
       window.onload = function() { // Is this needed?
       const go = new Go();
       WebAssembly.instantiateStreaming(fetch("o.wasm"), go.importObject).then((result) => {

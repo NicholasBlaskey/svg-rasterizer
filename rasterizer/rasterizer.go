@@ -12,6 +12,8 @@ import (
 	"strings"
 	"syscall/js"
 
+	"reflect"
+
 	"encoding/base64"
 	"image"
 	//	"image/color"
@@ -906,10 +908,25 @@ func getFile(filePath string) string {
 	return strings.ReplaceAll(s, "\r", "")
 }
 
+type testType struct {
+	X int
+	Y int
+	Z int
+}
+
 func createGui() {
 	gui := js.Global().Get("dat").Get("GUI").New()
 
 	fmt.Println("ONLOAD", gui)
+
+	x := &testType{1, 2, 3}
+	varType := reflect.TypeOf(*x)
+	fmt.Println(varType)
+
+	fields := reflect.VisibleFields(varType)
+	for _, f := range fields {
+		fmt.Println(f)
+	}
 }
 
 func main() {
