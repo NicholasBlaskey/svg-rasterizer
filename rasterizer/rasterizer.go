@@ -919,6 +919,29 @@ type GUI struct {
 }
 
 type controller struct {
+	JSController js.Value
+	changeFunc   func(js.Value)
+}
+
+func (c *controller) Min(x int) *controller {
+	c.JSController = c.JSController.Call("min", x)
+	c.changeFunc(c.JSController)
+
+	return c
+}
+
+func (c *controller) Max(x int) *controller {
+	c.JSController = c.JSController.Call("max", x)
+	c.changeFunc(c.JSController)
+
+	return c
+}
+
+func (c *controller) Step(x int) *controller {
+	c.JSController = c.JSController.Call("max", x)
+	c.changeFunc(c.JSController)
+
+	return c
 }
 
 func GUINew() *GUI {
@@ -937,21 +960,30 @@ func (g *GUI) Add(obj interface{}, fieldName string) *controller {
 	jsObj := js.ValueOf(jsObjMap)
 	//fmt.Println(jsObj.Get("X"))
 
-	g.JSGUI.Call("add", jsObj, fieldName).Call("onChange", js.FuncOf(
-		func(this js.Value, args []js.Value) interface{} {
-			changed := jsObj.Get(fieldName).Int() // TODO consider float and string types
-			//changedVal := reflect.ValueOf(changed)
-			//fieldVal.Set(changedVal)
+	// We need this changeFunction since we will need to set the value again with
+	// the new javascript controller when calls happen of both .min and .max for
+	// some reason.
+	c := &controller{}
+	c.JSController = g.JSGUI.Call("add", jsObj, fieldName)
+	c.changeFunc = func(jsController js.Value) {
+		jsController.Call("onChange", js.FuncOf(
+			func(this js.Value, args []js.Value) interface{} {
+				changed := jsObj.Get(fieldName).Int() // TODO consider float and string types
+				//changedVal := reflect.ValueOf(changed)
+				//fieldVal.Set(changedVal)
 
-			reflect.ValueOf(obj).Elem().FieldByName(fieldName).SetInt(int64(changed))
-			fmt.Println(obj)
+				fmt.Println(obj)
+				reflect.ValueOf(obj).Elem().FieldByName(fieldName).SetInt(int64(changed))
+				fmt.Println(obj)
 
-			// TODO send a message to a possible listener function?
+				// TODO send a message to a possible listener function?
 
-			return nil
-		}))
+				return nil
+			}))
+	}
+	c.changeFunc(c.JSController)
 
-	return nil
+	return c
 }
 
 func createGui() {
@@ -959,9 +991,9 @@ func createGui() {
 	gui := GUINew()
 
 	obj := testType{1, 2, 3}
-	gui.Add(&obj, "X")
-	gui.Add(&obj, "Y")
-	gui.Add(&obj, "Z")
+	gui.Add(&obj, "X").Min(1).Max(10).Step(3)
+	gui.Add(&obj, "Y").Min(-100).Max(100).Step(10)
+	gui.Add(&obj, "Z").Min(100).Max(1000)
 
 }
 
