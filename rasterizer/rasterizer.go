@@ -910,8 +910,9 @@ func getFile(filePath string) string {
 
 type testType struct {
 	X int
-	Y int
-	Z int
+	Y bool
+	Z float32
+	W string
 }
 
 type GUI struct {
@@ -955,13 +956,25 @@ func (g *GUI) Add(obj interface{}, fieldName string) *controller {
 	// Get our field value.
 	structVal := reflect.Indirect(reflect.ValueOf(obj))
 	fieldVal := structVal.FieldByName(fieldName)
-	//fmt.Println(fieldVal.Int())
+	fieldType := fieldVal.Type()
+	fmt.Println("adding", fieldType)
 
 	// Make our field into a javascript object.
 	jsObjMap := make(map[string]interface{})
-	jsObjMap[fieldName] = fieldVal.Int() // TODO consider float and string types
+
+	if fieldType.Name() == "float32" {
+		jsObjMap[fieldName] = fieldVal.Float()
+	} else if fieldType.Name() == "float64" {
+		jsObjMap[fieldName] = fieldVal.Float()
+	} else if fieldType.Name() == "int" {
+		jsObjMap[fieldName] = fieldVal.Int()
+	} else if fieldType.Name() == "bool" {
+		jsObjMap[fieldName] = fieldVal.Bool()
+	} else if fieldType.Name() == "string" {
+		jsObjMap[fieldName] = fieldVal.String()
+	}
+
 	jsObj := js.ValueOf(jsObjMap)
-	//fmt.Println(jsObj.Get("X"))
 
 	// We need this changeFunction since we will need to set the value again with
 	// the new javascript controller when calls happen of both .min and .max for
@@ -971,12 +984,24 @@ func (g *GUI) Add(obj interface{}, fieldName string) *controller {
 	c.changeFunc = func(jsController js.Value) {
 		jsController.Call("onChange", js.FuncOf(
 			func(this js.Value, args []js.Value) interface{} {
-				changed := jsObj.Get(fieldName).Int() // TODO consider float and string types
+				f := reflect.ValueOf(obj).Elem().FieldByName(fieldName)
+
+				changed := jsObj.Get(fieldName) // TODO consider float and string types
 				//changedVal := reflect.ValueOf(changed)
 				//fieldVal.Set(changedVal)
 
-				fmt.Println(obj)
-				reflect.ValueOf(obj).Elem().FieldByName(fieldName).SetInt(int64(changed))
+				if fieldType.Name() == "float32" {
+					f.SetFloat(changed.Float())
+				} else if fieldType.Name() == "float64" {
+					f.SetFloat(changed.Float())
+				} else if fieldType.Name() == "int" {
+					f.SetInt(int64(changed.Int()))
+				} else if fieldType.Name() == "bool" {
+					f.SetBool(changed.Bool())
+				} else if fieldType.Name() == "string" {
+					f.SetString(changed.String())
+				}
+
 				fmt.Println(obj)
 
 				// TODO send a message to a possible listener function?
@@ -1006,17 +1031,19 @@ func createGui() {
 	// New GUI
 	gui := GUINew()
 
-	obj := testType{1, 2, 3}
+	obj := testType{1, true, 3, "String"}
 	gui.Add(&obj, "X").Min(1).Max(10).Step(3).Name("x")
-	gui.Add(&obj, "Y").Min(-100).Max(100).Step(10).Name("This value is y")
+	gui.Add(&obj, "Y").Name("This value is y")
+	gui.Add(&obj, "Z").Min(100).Max(1000)
+	gui.Add(&obj, "W").Name("This value is a string")
 
 	{
-		obj2 := testType{5, 4, 3}
+		obj2 := testType{X: 5}
 		folder := gui.AddFolder("folder")
 		folder.Open()
-		folder.Add(&obj2, "X")
-		folder.Add(&obj2, "Y")
-		folder.Add(&obj2, "Z")
+		folder.Add(&obj2, "X").Name("X in a folder")
+
+		// function types?
 
 		/* https://github.com/PavelDoGreat/WebGL-Fluid-Simulation/blob/master/script.js
 		   let github = gui.add({ fun : () => {
@@ -1030,8 +1057,6 @@ func createGui() {
 		   githubIcon.className = 'icon github';
 		*/
 	}
-
-	gui.Add(&obj, "Z").Min(100).Max(1000)
 
 }
 
