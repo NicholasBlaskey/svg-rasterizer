@@ -914,52 +914,55 @@ type testType struct {
 	Z int
 }
 
+type GUI struct {
+	JSGUI js.Value
+}
+
+type controller struct {
+}
+
+func GUINew() *GUI {
+	return &GUI{JSGUI: js.Global().Get("dat").Get("GUI").New()}
+}
+
+func (g *GUI) Add(obj interface{}, fieldName string) *controller {
+	// Get our field value.
+	structVal := reflect.Indirect(reflect.ValueOf(obj))
+	fieldVal := structVal.FieldByName(fieldName)
+	//fmt.Println(fieldVal.Int())
+
+	// Make our field into a javascript object.
+	jsObjMap := make(map[string]interface{})
+	jsObjMap[fieldName] = fieldVal.Int() // TODO consider float and string types
+	jsObj := js.ValueOf(jsObjMap)
+	//fmt.Println(jsObj.Get("X"))
+
+	g.JSGUI.Call("add", jsObj, fieldName).Call("onChange", js.FuncOf(
+		func(this js.Value, args []js.Value) interface{} {
+			changed := jsObj.Get(fieldName).Int() // TODO consider float and string types
+			//changedVal := reflect.ValueOf(changed)
+			//fieldVal.Set(changedVal)
+
+			reflect.ValueOf(obj).Elem().FieldByName(fieldName).SetInt(int64(changed))
+			fmt.Println(obj)
+
+			// TODO send a message to a possible listener function?
+
+			return nil
+		}))
+
+	return nil
+}
+
 func createGui() {
 	// New GUI
-	gui := js.Global().Get("dat").Get("GUI").New()
-	fmt.Println("ONLOAD", gui)
+	gui := GUINew()
 
-	// gui.add(obj, "name")
-	// Get the field value.
-	{
-		obj := &testType{1, 2, 3}
-		fieldName := "X"
+	obj := testType{1, 2, 3}
+	gui.Add(&obj, "X")
+	gui.Add(&obj, "Y")
+	gui.Add(&obj, "Z")
 
-		// Get our field value.
-		structVal := reflect.ValueOf(*obj)
-		fieldVal := structVal.FieldByName(fieldName)
-		//fmt.Println(fieldVal.Int())
-
-		// Make our field into a javascript object.
-		jsObjMap := make(map[string]interface{})
-		jsObjMap[fieldName] = fieldVal.Int() // TODO consider float and string types
-		jsObj := js.ValueOf(jsObjMap)
-		//fmt.Println(jsObj.Get("X"))
-
-		gui.Call("add", jsObj, fieldName).Call("onChange", js.FuncOf(
-			func(this js.Value, args []js.Value) interface{} {
-				changed := jsObj.Get("X").Int() // TODO consider float and string types
-				//changedVal := reflect.ValueOf(changed)
-				//fieldVal.Set(changedVal)
-
-				reflect.ValueOf(obj).Elem().FieldByName(fieldName).SetInt(int64(changed))
-				fmt.Println(obj)
-
-				// TODO send a message to a possible listener function?
-
-				return nil
-			}))
-
-	}
-	/*
-		varType := reflect.TypeOf(*x)
-		fmt.Println(varType)
-
-		fields := reflect.VisibleFields(varType)
-		for _, f := range fields {
-			fmt.Println(f)
-		}
-	*/
 }
 
 func main() {
