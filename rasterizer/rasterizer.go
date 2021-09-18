@@ -926,21 +926,24 @@ type controller struct {
 func (c *controller) Min(x int) *controller {
 	c.JSController = c.JSController.Call("min", x)
 	c.changeFunc(c.JSController)
-
 	return c
 }
 
 func (c *controller) Max(x int) *controller {
 	c.JSController = c.JSController.Call("max", x)
 	c.changeFunc(c.JSController)
-
 	return c
 }
 
 func (c *controller) Step(x int) *controller {
 	c.JSController = c.JSController.Call("max", x)
 	c.changeFunc(c.JSController)
+	return c
+}
 
+func (c *controller) Name(x string) *controller {
+	c.JSController = c.JSController.Call("name", x)
+	c.changeFunc(c.JSController)
 	return c
 }
 
@@ -986,13 +989,48 @@ func (g *GUI) Add(obj interface{}, fieldName string) *controller {
 	return c
 }
 
+func (g *GUI) AddFolder(name string) *GUI {
+	subJSGUI := g.JSGUI.Call("addFolder", name)
+	return &GUI{JSGUI: subJSGUI}
+}
+
+func (g *GUI) Open() {
+	g.JSGUI.Call("open")
+}
+
+func (g *GUI) Close() {
+	g.JSGUI.Call("close")
+}
+
 func createGui() {
 	// New GUI
 	gui := GUINew()
 
 	obj := testType{1, 2, 3}
-	gui.Add(&obj, "X").Min(1).Max(10).Step(3)
-	gui.Add(&obj, "Y").Min(-100).Max(100).Step(10)
+	gui.Add(&obj, "X").Min(1).Max(10).Step(3).Name("x")
+	gui.Add(&obj, "Y").Min(-100).Max(100).Step(10).Name("This value is y")
+
+	{
+		obj2 := testType{5, 4, 3}
+		folder := gui.AddFolder("folder")
+		folder.Open()
+		folder.Add(&obj2, "X")
+		folder.Add(&obj2, "Y")
+		folder.Add(&obj2, "Z")
+
+		/* https://github.com/PavelDoGreat/WebGL-Fluid-Simulation/blob/master/script.js
+		   let github = gui.add({ fun : () => {
+		       window.open('https://github.com/PavelDoGreat/WebGL-Fluid-Simulation');
+		       ga('send', 'event', 'link button', 'github');
+		   } }, 'fun').name('Github');
+		   github.__li.className = 'cr function bigFont';
+		   github.__li.style.borderLeft = '3px solid #8C8C8C';
+		   let githubIcon = document.createElement('span');
+		   github.domElement.parentElement.appendChild(githubIcon);
+		   githubIcon.className = 'icon github';
+		*/
+	}
+
 	gui.Add(&obj, "Z").Min(100).Max(1000)
 
 }
