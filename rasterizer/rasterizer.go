@@ -923,6 +923,7 @@ type GUI struct {
 type controller struct {
 	JSController js.Value
 	changeFunc   func(js.Value)
+	listenerFunc func()
 }
 
 func (c *controller) Min(x int) *controller {
@@ -946,6 +947,12 @@ func (c *controller) Step(x int) *controller {
 func (c *controller) Name(x string) *controller {
 	c.JSController = c.JSController.Call("name", x)
 	c.changeFunc(c.JSController)
+	return c
+}
+
+func (c *controller) OnChange(fun func()) *controller {
+	c.listenerFunc = fun
+
 	return c
 }
 
@@ -1015,10 +1022,9 @@ func (g *GUI) Add(obj interface{}, fieldName string) *controller {
 					panic("We should never reach this since we check the type above.")
 				}
 
-				fmt.Println(obj)
-
-				// TODO send a message to a possible listener function?
-
+				if c.listenerFunc != nil {
+					c.listenerFunc()
+				}
 				return nil
 			}))
 	}
@@ -1049,9 +1055,13 @@ func createGui() {
 			js.Global().Call("alert", "alerted")
 		},
 	}
-	gui.Add(&obj, "X").Min(1).Max(10).Step(3).Name("x")
-	gui.Add(&obj, "Y").Name("This value is y")
-	gui.Add(&obj, "Z").Min(100).Max(1000)
+
+	printObject := func() {
+		fmt.Println("Printing object", obj)
+	}
+	gui.Add(&obj, "X").Min(1).Max(10).Step(3).Name("x").OnChange(printObject)
+	gui.Add(&obj, "Y").Name("This value is y").OnChange(printObject)
+	gui.Add(&obj, "Z").Min(100).Max(1000).OnChange(printObject)
 	gui.Add(&obj, "W").Name("This value is a string")
 	gui.Add(&obj, "Fun").Name("alert")
 
@@ -1061,7 +1071,8 @@ func createGui() {
 		folder.Open()
 		folder.Add(&obj2, "X").Name("X in a folder")
 
-		// function types?
+		// select options TODO
+		//
 
 		/* https://github.com/PavelDoGreat/WebGL-Fluid-Simulation/blob/master/script.js
 		   let github = gui.add({ fun : () => {
