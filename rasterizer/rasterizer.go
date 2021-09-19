@@ -909,10 +909,11 @@ func getFile(filePath string) string {
 }
 
 type testType struct {
-	X int
-	Y bool
-	Z float32
-	W string
+	X   int
+	Y   bool
+	Z   float32
+	W   string
+	Fun func()
 }
 
 type GUI struct {
@@ -957,21 +958,31 @@ func (g *GUI) Add(obj interface{}, fieldName string) *controller {
 	structVal := reflect.Indirect(reflect.ValueOf(obj))
 	fieldVal := structVal.FieldByName(fieldName)
 	fieldType := fieldVal.Type()
-	fmt.Println("adding", fieldType)
 
 	// Make our field into a javascript object.
 	jsObjMap := make(map[string]interface{})
-
-	if fieldType.Name() == "float32" {
+	switch fieldType.Name() {
+	case "float32":
 		jsObjMap[fieldName] = fieldVal.Float()
-	} else if fieldType.Name() == "float64" {
+	case "float64":
 		jsObjMap[fieldName] = fieldVal.Float()
-	} else if fieldType.Name() == "int" {
+	case "int":
 		jsObjMap[fieldName] = fieldVal.Int()
-	} else if fieldType.Name() == "bool" {
+	case "int64":
+		jsObjMap[fieldName] = fieldVal.Int()
+	case "bool":
 		jsObjMap[fieldName] = fieldVal.Bool()
-	} else if fieldType.Name() == "string" {
+	case "string":
 		jsObjMap[fieldName] = fieldVal.String()
+	case "": // Func type.
+		jsObjMap[fieldName] = js.FuncOf(
+			func(this js.Value, args []js.Value) interface{} {
+				fieldVal.Call(nil)
+				return nil
+			})
+	default:
+		panic("Tried to set unsupported type of " +
+			fieldType.Name() + " in object ")
 	}
 
 	jsObj := js.ValueOf(jsObjMap)
@@ -984,22 +995,24 @@ func (g *GUI) Add(obj interface{}, fieldName string) *controller {
 	c.changeFunc = func(jsController js.Value) {
 		jsController.Call("onChange", js.FuncOf(
 			func(this js.Value, args []js.Value) interface{} {
+				// Set the value from the Javascript object to our Go object.
+				changed := jsObj.Get(fieldName)
 				f := reflect.ValueOf(obj).Elem().FieldByName(fieldName)
 
-				changed := jsObj.Get(fieldName) // TODO consider float and string types
-				//changedVal := reflect.ValueOf(changed)
-				//fieldVal.Set(changedVal)
-
-				if fieldType.Name() == "float32" {
+				switch fieldType.Name() {
+				case "float32":
 					f.SetFloat(changed.Float())
-				} else if fieldType.Name() == "float64" {
+				case "float64":
 					f.SetFloat(changed.Float())
-				} else if fieldType.Name() == "int" {
+				case "int":
 					f.SetInt(int64(changed.Int()))
-				} else if fieldType.Name() == "bool" {
+				case "bool":
 					f.SetBool(changed.Bool())
-				} else if fieldType.Name() == "string" {
+				case "string":
 					f.SetString(changed.String())
+				case "": // Func type. Do nothing since we don't need to assign anything back.
+				default:
+					panic("We should never reach this since we check the type above.")
 				}
 
 				fmt.Println(obj)
@@ -1031,11 +1044,16 @@ func createGui() {
 	// New GUI
 	gui := GUINew()
 
-	obj := testType{1, true, 3, "String"}
+	obj := testType{1, true, 3, "String",
+		func() {
+			js.Global().Call("alert", "alerted")
+		},
+	}
 	gui.Add(&obj, "X").Min(1).Max(10).Step(3).Name("x")
 	gui.Add(&obj, "Y").Name("This value is y")
 	gui.Add(&obj, "Z").Min(100).Max(1000)
 	gui.Add(&obj, "W").Name("This value is a string")
+	gui.Add(&obj, "Fun").Name("alert")
 
 	{
 		obj2 := testType{X: 5}
