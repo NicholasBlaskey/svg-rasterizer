@@ -886,13 +886,19 @@ func (s *Svg) rasterize(r *rasterizer) {
 	}
 }
 
-func getFile(filePath string) string {
+func getUrl(filePath string) string {
 	loc := js.Global().Get("location")
 	url := loc.Get("protocol").String() + "//" +
 		loc.Get("hostname").String() + ":" +
 		loc.Get("port").String()
 
-	resp, err := http.Get(url + filePath)
+	return url + filePath
+}
+
+func getFile(filePath string) string {
+	url := getUrl(filePath)
+
+	resp, err := http.Get(url)
 	if err != nil {
 		panic(err)
 	}
@@ -913,24 +919,25 @@ type testType struct {
 	Fun func()
 }
 
-func createGui() {
+func createGui(r *rasterizer) {
 	// New GUI
 	gui := datGUI.New()
 
-	obj := testType{1, true, 3, "String",
-		func() {
-			js.Global().Call("alert", "alerted")
-		},
-	}
+	// Inner loop.
+	obj := testType{Fun: func() {
+		js.Global().Call("alert", "alerted")
+	}}
+	svgIcon := js.Global().Get("document").Call("createElement", "img")
 
-	printObject := func() {
-		fmt.Println("Printing object", obj)
-	}
-	gui.Add(&obj, "X").Min(1).Max(10).Step(3).Name("x").OnChange(printObject)
-	gui.Add(&obj, "Y").Name("This value is y").OnChange(printObject)
-	gui.Add(&obj, "Z").Min(100).Max(1000).OnChange(printObject)
-	gui.Add(&obj, "W").Name("This value is a string")
-	gui.Add(&obj, "Fun").Name("alert")
+	path := getUrl(`/svg/illustration/06_sphere.svg`)
+	fmt.Println(path)
+	svgIcon.Set("src", path)
+	svgIcon.Set("height", 50)
+	funController := gui.Add(&obj, "Fun")
+	funController.JSController.Get("__li").Get("style").Set("height", 50)
+
+	funController.JSController.Get("domElement").Get("parentElement").Call("appendChild", svgIcon)
+	//js.Global().Get("document").Get("body").Call("appendChild", svgIcon)
 
 	/* https://github.com/PavelDoGreat/WebGL-Fluid-Simulation/blob/master/script.js
 	   let github = gui.add({ fun : () => {
@@ -979,7 +986,7 @@ func main() {
 
 	//r.SetSvg("/svg/illustration/01_sketchpad.svg")
 
-	createGui()
+	createGui(r)
 
 	if err != nil {
 		panic(err)
