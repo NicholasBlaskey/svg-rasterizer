@@ -895,9 +895,7 @@ func getUrl(filePath string) string {
 	return url + filePath
 }
 
-func getFile(filePath string) string {
-	url := getUrl(filePath)
-
+func getFile(url string) string {
 	resp, err := http.Get(url)
 	if err != nil {
 		panic(err)
@@ -919,24 +917,44 @@ type testType struct {
 	Fun func()
 }
 
+func addSvgToGUI(gui *datGUI.GUI, path string, r *rasterizer) {
+	obj := testType{Fun: func() {
+		go r.SetSvg(path)
+	}}
+
+	split := strings.Split(path, "/")
+	name := strings.TrimSuffix(split[len(split)-1], ".svg")
+	funController := gui.Add(&obj, "Fun").Name(name)
+
+	svgIcon := js.Global().Get("document").Call("createElement", "img")
+	svgIcon.Set("background-color", "white")
+	svgIcon.Get("style").Set("background-color", "white")
+	svgIcon.Get("style").Set("float", "right")
+
+	height := 75
+	svgIcon.Set("src", path)
+	svgIcon.Set("height", height)
+	funController.JSController.Get("__li").Get("style").Set("height", height)
+	funController.JSController.Get("domElement").Get("parentElement").Call("appendChild", svgIcon)
+}
+
 func createGui(r *rasterizer) {
 	// New GUI
 	gui := datGUI.New()
 
-	// Inner loop.
-	obj := testType{Fun: func() {
-		js.Global().Call("alert", "alerted")
-	}}
-	svgIcon := js.Global().Get("document").Call("createElement", "img")
+	folderNames := []string{"illustration"}
+	svgFiles := [][]string{
+		[]string{"01_sketchpad", "02_hexes", "03_circle", "04_sun", "05_lion",
+			"06_sphere", "07_lines", "08_monkeytree", "09_kochcurve",
+		},
+	}
 
-	path := getUrl(`/svg/illustration/06_sphere.svg`)
-	fmt.Println(path)
-	svgIcon.Set("src", path)
-	svgIcon.Set("height", 50)
-	funController := gui.Add(&obj, "Fun")
-	funController.JSController.Get("__li").Get("style").Set("height", 50)
+	for i, folder := range folderNames {
+		for _, svgFile := range svgFiles[i] {
+			addSvgToGUI(gui, getUrl("/svg/"+folder+"/"+svgFile+".svg"), r)
+		}
+	}
 
-	funController.JSController.Get("domElement").Get("parentElement").Call("appendChild", svgIcon)
 	//js.Global().Get("document").Get("body").Call("appendChild", svgIcon)
 
 	/* https://github.com/PavelDoGreat/WebGL-Fluid-Simulation/blob/master/script.js
@@ -956,6 +974,7 @@ func createGui(r *rasterizer) {
 func main() {
 	document := js.Global().Get("document")
 	canvas := document.Call("getElementById", "webgl")
+	canvas.Get("style").Set("border-style", "solid")
 
 	//r, err := New(canvas, "/svg/basic/test1.svg")
 	//r, err := New(canvas, "/svg/basic/test2.svg")
@@ -971,7 +990,7 @@ func main() {
 	//r, err := New(canvas, "/svg/alpha/04_scotty.svg")
 	//r, err := New(canvas, "/svg/alpha/05_sphere.svg")
 
-	r, err := New(canvas, "/svg/illustration/01_sketchpad.svg")
+	r, err := New(canvas, getUrl("/svg/illustration/01_sketchpad.svg"))
 	//r, err := New(canvas, "/svg/illustration/02_hexes.svg")
 	//r, err := New(canvas, "/svg/illustration/03_circle.svg")
 	//r, err := New(canvas, "/svg/illustration/04_sun.svg")
