@@ -942,6 +942,13 @@ func createGui(r *rasterizer) {
 	// New GUI
 	gui := datGUI.New()
 
+	style := js.Global().Get("document").Call("createElement", "style")
+	style.Set("innerHTML", `
+    .closed {
+		display: none;
+    }`)
+	js.Global().Get("document").Get("head").Call("appendChild", style)
+
 	folderNames := []string{"illustration"}
 	svgFiles := [][]string{
 		[]string{"01_sketchpad", "02_hexes", "03_circle", "04_sun", "05_lion",
