@@ -676,26 +676,12 @@ func New(canvas js.Value, filePath string) (*rasterizer, error) {
 	r.SetSvg(filePath)
 
 	pixelInspectorOn := false
-
-	onSwitch := true // TODO REMOVE
 	js.Global().Call("addEventListener", "keydown", js.FuncOf(
 		func(this js.Value, args []js.Value) interface{} {
 			if args[0].Get("key").String() == "z" {
 				pixelInspectorOn = !pixelInspectorOn
 				b.EnablePixelInspector(pixelInspectorOn)
 			}
-
-			// TODO REMOVE
-			if args[0].Get("key").String() == "r" {
-				fmt.Println("ON?")
-				onSwitch = !onSwitch
-				if onSwitch {
-					go r.SetSvg("/svg/illustration/07_lines.svg")
-				} else {
-					go r.SetSvg("/svg/illustration/05_lion.svg")
-				}
-			}
-			// TODO REMOVE
 
 			return nil
 		}))
@@ -944,21 +930,24 @@ func createGui(r *rasterizer) {
 
 	style := js.Global().Get("document").Call("createElement", "style")
 	style.Set("innerHTML", `
-    .closed {
+    ul.closed > :not(li.title) {
 		display: none;
     }`)
 	js.Global().Get("document").Get("head").Call("appendChild", style)
 
-	folderNames := []string{"illustration"}
+	folderNames := []string{"basic", "illustration"}
 	svgFiles := [][]string{
+		[]string{"test1", "test2", "test3", "test4", "test5", "test6", "test7"},
 		[]string{"01_sketchpad", "02_hexes", "03_circle", "04_sun", "05_lion",
 			"06_sphere", "07_lines", "08_monkeytree", "09_kochcurve",
 		},
 	}
 
 	for i, folder := range folderNames {
+		folderGUI := gui.AddFolder(folder)
+		//folderGUI.Open()
 		for _, svgFile := range svgFiles[i] {
-			addSvgToGUI(gui, getUrl("/svg/"+folder+"/"+svgFile+".svg"), r)
+			addSvgToGUI(folderGUI, getUrl("/svg/"+folder+"/"+svgFile+".svg"), r)
 		}
 	}
 
