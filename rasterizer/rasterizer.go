@@ -935,16 +935,18 @@ func createGui(r *rasterizer) {
     }`)
 	js.Global().Get("document").Get("head").Call("appendChild", style)
 
-	folderNames := []string{"basic", "illustration"}
+	folderNames := []string{"basic", "alpha", "illustration", "hardcore"}
 	svgFiles := [][]string{
 		[]string{"test1", "test2", "test3", "test4", "test5", "test6", "test7"},
+		[]string{"01_prism", "02_cube", "03_buckyball", "04_scotty", "05_sphere"},
 		[]string{"01_sketchpad", "02_hexes", "03_circle", "04_sun", "05_lion",
-			"06_sphere", "07_lines", "08_monkeytree", "09_kochcurve",
-		},
+			"06_sphere", "07_lines", "08_monkeytree", "09_kochcurve"},
+		[]string{"01_degenerate_square1", "02_degenerate_square2"},
 	}
 
+	svgImagesGUI := gui.AddFolder("svg images")
 	for i, folder := range folderNames {
-		folderGUI := gui.AddFolder(folder)
+		folderGUI := svgImagesGUI.AddFolder(folder)
 		//folderGUI.Open()
 		for _, svgFile := range svgFiles[i] {
 			addSvgToGUI(folderGUI, getUrl("/svg/"+folder+"/"+svgFile+".svg"), r)
