@@ -925,10 +925,7 @@ func addSvgToGUI(gui *datGUI.GUI, path string, r *rasterizer) {
 	funController.JSController.Get("domElement").Get("parentElement").Call("appendChild", svgIcon)
 }
 
-func createGui(r *rasterizer) {
-	// New GUI
-	gui := datGUI.New()
-
+func createSvgFolders(gui *datGUI.GUI, r *rasterizer) {
 	style := js.Global().Get("document").Call("createElement", "style")
 	style.Set("innerHTML", `
     ul.closed > :not(li.title) {
@@ -957,6 +954,60 @@ func createGui(r *rasterizer) {
 			addSvgToGUI(folderGUI, getUrl("/svg/"+folder+"/"+svgFile+".svg"), r)
 		}
 	}
+}
+
+type guiValues struct {
+	CanvasWidth           int
+	CanvasHeight          int
+	ShouldKeepCanvasRatio bool
+}
+
+func createGui(r *rasterizer) {
+	gui := datGUI.New()
+
+	/*
+		guiVals := guiValues{
+			CanvasSizeFactor: 1.0,
+		}
+		gui.Add(&guiVals, "CanvasSizeFactor").Name(
+			"Canvas scale factor").Step(01).Min(0.01).Max(10.0).OnChange(func() {
+			r.canvas.Set("width", float32(r.origWidthPixels)*guiVals.CanvasSizeFactor)
+			r.canvas.Set("height", float32(r.origHeightPixels)*guiVals.CanvasSizeFactor)
+			r.board.Draw()
+		})
+	*/
+
+	guiVals := guiValues{
+		CanvasWidth:  r.canvas.Get("width").Int(),
+		CanvasHeight: r.canvas.Get("height").Int(),
+	}
+	widthChangeFunc := func() {
+		if guiVals.ShouldKeepCanvasRatio {
+			aspectRatio := float32(r.origWidthPixels) / float32(r.origHeightPixels)
+			guiVals.CanvasHeight = int(float32(guiVals.CanvasWidth) * (1.0 / aspectRatio))
+		}
+		r.canvas.Set("width", guiVals.CanvasWidth)
+		r.canvas.Set("height", guiVals.CanvasHeight)
+
+		r.board.Draw()
+	}
+	heightChangeFunc := func() {
+		if guiVals.ShouldKeepCanvasRatio {
+			aspectRatio := float32(r.origWidthPixels) / float32(r.origHeightPixels)
+			guiVals.CanvasWidth = int(float32(guiVals.CanvasHeight) * (aspectRatio))
+		}
+		r.canvas.Set("width", guiVals.CanvasWidth)
+		r.canvas.Set("height", guiVals.CanvasHeight)
+
+		r.board.Draw()
+	}
+	gui.Add(&guiVals, "CanvasWidth").Step(1).Min(50).Max(2000).OnChange(widthChangeFunc)
+	gui.Add(&guiVals, "CanvasHeight").Step(1).Min(50).Max(2000).OnChange(heightChangeFunc)
+	gui.Add(&guiVals, "ShouldKeepCanvasRatio").Name("Keep aspect?").OnChange(widthChangeFunc)
+
+	//gui.Add(
+
+	createSvgFolders(gui, r)
 }
 
 func main() {
