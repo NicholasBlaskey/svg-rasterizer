@@ -118,8 +118,8 @@ func (s *Rect) rasterize(r *rasterizer) {
 		col.a = 1.0
 	}
 
-	// If either width or height is 0 assume we have a single point.
-	if s.Width == 0.0 || s.Height == 0.0 {
+	// If either width or height is 0 or 1 assume we have a single point.
+	if s.Width == 0.0 || s.Height == 0.0 || (s.Width == 1.0 && s.Height == 1.0) {
 		r.drawPixel(s.X, s.Y, col)
 		return
 	}
