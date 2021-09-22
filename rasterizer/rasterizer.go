@@ -981,10 +981,19 @@ func createGui(r *rasterizer) {
 		CanvasWidth:  r.canvas.Get("width").Int(),
 		CanvasHeight: r.canvas.Get("height").Int(),
 	}
+
+	var widthController, heightController *datGUI.Controller
 	widthChangeFunc := func() {
 		if guiVals.ShouldKeepCanvasRatio {
 			aspectRatio := float32(r.origWidthPixels) / float32(r.origHeightPixels)
 			guiVals.CanvasHeight = int(float32(guiVals.CanvasWidth) * (1.0 / aspectRatio))
+
+			// Hack here to prevent us from going in a infinte loop of calling
+			// the change function over and over again. So we can turn
+			// of the change function recursion with this flag then turn it back on.
+			guiVals.ShouldKeepCanvasRatio = false
+			heightController.SetValue(guiVals.CanvasHeight)
+			guiVals.ShouldKeepCanvasRatio = true
 		}
 		r.canvas.Set("width", guiVals.CanvasWidth)
 		r.canvas.Set("height", guiVals.CanvasHeight)
@@ -995,14 +1004,17 @@ func createGui(r *rasterizer) {
 		if guiVals.ShouldKeepCanvasRatio {
 			aspectRatio := float32(r.origWidthPixels) / float32(r.origHeightPixels)
 			guiVals.CanvasWidth = int(float32(guiVals.CanvasHeight) * (aspectRatio))
+			widthController.SetValue(guiVals.CanvasWidth)
 		}
 		r.canvas.Set("width", guiVals.CanvasWidth)
 		r.canvas.Set("height", guiVals.CanvasHeight)
 
 		r.board.Draw()
 	}
-	gui.Add(&guiVals, "CanvasWidth").Step(1).Min(50).Max(2000).OnChange(widthChangeFunc)
-	gui.Add(&guiVals, "CanvasHeight").Step(1).Min(50).Max(2000).OnChange(heightChangeFunc)
+	widthController = gui.Add(&guiVals,
+		"CanvasWidth").Step(1).Min(50).Max(2000).OnChange(widthChangeFunc)
+	heightController = gui.Add(&guiVals,
+		"CanvasHeight").Step(1).Min(50).Max(2000).OnChange(heightChangeFunc)
 	gui.Add(&guiVals, "ShouldKeepCanvasRatio").Name("Keep aspect?").OnChange(widthChangeFunc)
 
 	//gui.Add(
