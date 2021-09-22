@@ -17,6 +17,7 @@ type Board struct {
 	canvas js.Value
 	//
 	ZoomFactor       float32
+	zoomValue        float32
 	TranslationSpeed float32
 	translation      mgl.Vec2
 	//
@@ -186,33 +187,44 @@ func (b *Board) initTranslationListener() {
 		}))
 }
 
-func (b *Board) applyTranslation(xStart, yStart, x, y float32) {
-	b.translation = b.translation.Add(mgl.Vec2{x - xStart, yStart - y}.Mul(b.TranslationSpeed))
-
+func (b *Board) setTranslation() {
 	b.gl.UseProgram(b.program)
 	util.SetVec2(b.gl, b.program, "translation", b.translation)
 
 	b.gl.UseProgram(b.pixelInspectorProgram)
 	util.SetVec2(b.gl, b.pixelInspectorProgram, "translation", b.translation)
+}
+
+func (b *Board) applyTranslation(xStart, yStart, x, y float32) {
+	b.translation = b.translation.Add(mgl.Vec2{x - xStart, yStart - y}.Mul(b.TranslationSpeed))
+	b.setTranslation()
 
 	b.draw()
 }
 
+func (b *Board) ResetView() {
+	b.translation = mgl.Vec2{}
+	b.setTranslation()
+
+	b.zoomValue = 1.0
+	b.setZoom()
+}
+
 func (b *Board) initZoomListener() {
-	zoomValue := float32(1.0)
-	b.setZoom(zoomValue)
+	b.zoomValue = float32(1.0)
+	b.setZoom()
 
 	eventFunc := js.FuncOf(func(this js.Value, args []js.Value) interface{} {
 		val := args[0].Get("deltaY").Float()
 		if val > 0 {
-			zoomValue -= b.ZoomFactor
-			if zoomValue < 0 {
-				zoomValue = 0
+			b.zoomValue -= b.ZoomFactor
+			if b.zoomValue < 0 {
+				b.zoomValue = 0
 			}
 		} else {
-			zoomValue += b.ZoomFactor
+			b.zoomValue += b.ZoomFactor
 		}
-		b.setZoom(zoomValue)
+		b.setZoom()
 		b.draw()
 		return nil
 	})
@@ -220,12 +232,12 @@ func (b *Board) initZoomListener() {
 	js.Global().Call("addEventListener", "wheel", eventFunc)
 }
 
-func (b *Board) setZoom(zoom float32) {
+func (b *Board) setZoom() {
 	b.gl.UseProgram(b.program)
-	util.SetFloat(b.gl, b.program, "zoomFactor", zoom)
+	util.SetFloat(b.gl, b.program, "zoomFactor", b.zoomValue)
 
 	b.gl.UseProgram(b.pixelInspectorProgram)
-	util.SetFloat(b.gl, b.pixelInspectorProgram, "zoomFactor", zoom)
+	util.SetFloat(b.gl, b.pixelInspectorProgram, "zoomFactor", b.zoomValue)
 }
 
 func (b *Board) initShaders() error {

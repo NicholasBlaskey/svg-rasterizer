@@ -719,6 +719,7 @@ func (r *rasterizer) SetSvg(filePath string) error {
 
 	// Update board.
 	r.board.SetWidthHeight(r.widthPixels, r.heightPixels)
+	r.board.ResetView()
 	r.canvas.Set("width", r.widthPixels)
 	r.canvas.Set("height", r.heightPixels)
 
@@ -945,28 +946,17 @@ func createGui(r *rasterizer) {
 	}
 
 	svgImagesGUI := gui.AddFolder("svg images")
+	svgImagesGUI.Open()
 	for i, folder := range folderNames {
 		folderGUI := svgImagesGUI.AddFolder(folder)
-		//folderGUI.Open()
+
+		if i == 0 {
+			folderGUI.Open()
+		}
 		for _, svgFile := range svgFiles[i] {
 			addSvgToGUI(folderGUI, getUrl("/svg/"+folder+"/"+svgFile+".svg"), r)
 		}
 	}
-
-	//js.Global().Get("document").Get("body").Call("appendChild", svgIcon)
-
-	/* https://github.com/PavelDoGreat/WebGL-Fluid-Simulation/blob/master/script.js
-	   let github = gui.add({ fun : () => {
-	       window.open('https://github.com/PavelDoGreat/WebGL-Fluid-Simulation');
-	       ga('send', 'event', 'link button', 'github');
-	   } }, 'fun').name('Github');
-	   github.__li.className = 'cr function bigFont';
-	   github.__li.style.borderLeft = '3px solid #8C8C8C';
-	   let githubIcon = document.createElement('span');
-	   github.domElement.parentElement.appendChild(githubIcon);
-	   githubIcon.className = 'icon github';
-	*/
-
 }
 
 func main() {
