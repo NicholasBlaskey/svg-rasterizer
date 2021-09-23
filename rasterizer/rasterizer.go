@@ -904,9 +904,17 @@ type testType struct {
 	Fun func()
 }
 
-func addSvgToGUI(gui *datGUI.GUI, path string, r *rasterizer) {
+func addSvgToGUI(gui *datGUI.GUI, path string, r *rasterizer, onSvgLoad func()) {
 	obj := testType{Fun: func() {
-		go r.SetSvg(path)
+		go func() {
+			fmt.Println("PRE", r.canvas.Get("width"), r.canvas.Get("height"))
+
+			r.SetSvg(path)
+
+			fmt.Println(r.canvas.Get("width"), r.canvas.Get("height"))
+
+			onSvgLoad()
+		}()
 	}}
 
 	split := strings.Split(path, "/")
@@ -925,7 +933,7 @@ func addSvgToGUI(gui *datGUI.GUI, path string, r *rasterizer) {
 	funController.JSController.Get("domElement").Get("parentElement").Call("appendChild", svgIcon)
 }
 
-func createSvgFolders(gui *datGUI.GUI, r *rasterizer) {
+func createSvgFolders(gui *datGUI.GUI, r *rasterizer, onSvgLoad func()) {
 	style := js.Global().Get("document").Call("createElement", "style")
 	style.Set("innerHTML", `
     ul.closed > :not(li.title) {
@@ -947,11 +955,11 @@ func createSvgFolders(gui *datGUI.GUI, r *rasterizer) {
 	for i, folder := range folderNames {
 		folderGUI := svgImagesGUI.AddFolder(folder)
 
-		if i == 0 {
+		if folder == "illustration" {
 			folderGUI.Open()
 		}
 		for _, svgFile := range svgFiles[i] {
-			addSvgToGUI(folderGUI, getUrl("/svg/"+folder+"/"+svgFile+".svg"), r)
+			addSvgToGUI(folderGUI, getUrl("/svg/"+folder+"/"+svgFile+".svg"), r, onSvgLoad)
 		}
 	}
 }
@@ -964,18 +972,6 @@ type guiValues struct {
 
 func createGui(r *rasterizer) {
 	gui := datGUI.New()
-
-	/*
-		guiVals := guiValues{
-			CanvasSizeFactor: 1.0,
-		}
-		gui.Add(&guiVals, "CanvasSizeFactor").Name(
-			"Canvas scale factor").Step(01).Min(0.01).Max(10.0).OnChange(func() {
-			r.canvas.Set("width", float32(r.origWidthPixels)*guiVals.CanvasSizeFactor)
-			r.canvas.Set("height", float32(r.origHeightPixels)*guiVals.CanvasSizeFactor)
-			r.board.Draw()
-		})
-	*/
 
 	guiVals := guiValues{
 		CanvasWidth:  r.canvas.Get("width").Int(),
@@ -1011,15 +1007,23 @@ func createGui(r *rasterizer) {
 
 		r.board.Draw()
 	}
+
 	widthController = gui.Add(&guiVals,
 		"CanvasWidth").Step(1).Min(50).Max(2000).OnChange(widthChangeFunc)
 	heightController = gui.Add(&guiVals,
 		"CanvasHeight").Step(1).Min(50).Max(2000).OnChange(heightChangeFunc)
 	gui.Add(&guiVals, "ShouldKeepCanvasRatio").Name("Keep aspect?").OnChange(widthChangeFunc)
 
-	//gui.Add(
+	onSvgLoad := func() {
+		w, h := r.canvas.Get("width").Int(), r.canvas.Get("height").Int()
+		tmp := guiVals.ShouldKeepCanvasRatio
+		guiVals.ShouldKeepCanvasRatio = false
 
-	createSvgFolders(gui, r)
+		widthController.SetValue(w)
+		heightController.SetValue(h)
+		guiVals.ShouldKeepCanvasRatio = tmp
+	}
+	createSvgFolders(gui, r, onSvgLoad)
 }
 
 func main() {
