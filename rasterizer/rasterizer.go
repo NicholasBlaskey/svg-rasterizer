@@ -84,6 +84,7 @@ type rasterizer struct {
 	pointsToFill         []int
 	colorOfPointsToFill  []Color
 	canvas               js.Value
+	scale                float32
 }
 
 type Svg struct {
@@ -131,10 +132,27 @@ func (s *Rect) rasterize(r *rasterizer) {
 	}
 
 	// Otherwise have a full on rectangle.
-	x *= float32(r.sampleRate)           // TODO times the scale
-	y *= float32(r.sampleRate)           // TODO times the scale
-	w := s.Width * float32(r.sampleRate) // TODO Times the scale
-	h := s.Height * float32(r.sampleRate)
+	// Draw rectangle border.
+	w := s.Width * r.scale
+	h := s.Height * r.scale
+	outlineCol := parseColor(s.Stroke)
+	col.a = s.StrokeOpacity
+	if col.a == 0.0 {
+		col.a = 1.0
+	}
+	for i := float32(0); i < w; i++ {
+		r.drawPixel(x+i, y+1.0, outlineCol)
+		r.drawPixel(x+i, y+h-1, outlineCol)
+	}
+	for i := float32(0); i < h; i++ {
+		r.drawPixel(x+0, y+i, outlineCol)
+		r.drawPixel(x+w-1, y+i, outlineCol)
+	}
+
+	w *= float32(r.sampleRate)
+	h *= float32(r.sampleRate)
+	x *= float32(r.sampleRate)
+	y *= float32(r.sampleRate)
 
 	// Draw inside of rectangle.
 	for x0 := x; x0 < x+w; x0++ {
@@ -143,20 +161,6 @@ func (s *Rect) rasterize(r *rasterizer) {
 		}
 	}
 
-	// Draw rectangle border.
-	outlineCol := parseColor(s.Stroke)
-	col.a = s.StrokeOpacity
-	if col.a == 0.0 {
-		col.a = 1.0
-	}
-	for i := float32(0); i < w; i++ {
-		r.drawPixel(x+i, y+1.0, outlineCol)
-		r.drawPixel(x+i, y+float32(s.Height)-1, outlineCol)
-	}
-	for i := float32(0); i < h; i++ {
-		r.drawPixel(x+0, y+i, outlineCol)
-		r.drawPixel(x+float32(s.Width)-1, y+i, outlineCol)
-	}
 }
 
 func blendColors(col Color, red, g, b, a byte) (byte, byte, byte, byte) {
@@ -445,8 +449,8 @@ func (r *rasterizer) transform(points []float32, trans mgl.Mat3, isAliased bool)
 			sampleRate = 1.0
 		}
 
-		points[i] = transformed[0] * sampleRate
-		points[i+1] = transformed[1] * sampleRate
+		points[i] = transformed[0] * r.scale * sampleRate
+		points[i+1] = transformed[1] * r.scale * sampleRate
 	}
 
 	return points
@@ -677,6 +681,7 @@ func (s *Image) sampleBilinear(img mip, x, y float32) Color {
 func New(canvas js.Value, filePath string) (*rasterizer, error) {
 	r := &rasterizer{}
 	r.canvas = canvas
+	r.scale = 1.0
 
 	b, err := board.New(r.canvas)
 	if err != nil {
@@ -751,6 +756,8 @@ func (r *rasterizer) SetSvg(filePath string) error {
 
 func (r *rasterizer) SetTargetScale(scale float32) {
 	fmt.Println(scale)
+
+	r.scale = scale
 
 	r.widthPixels = int(float32(r.unscaledWidthPixels) * scale)
 	r.heightPixels = int(float32(r.unscaledHeightPixels) * scale)
