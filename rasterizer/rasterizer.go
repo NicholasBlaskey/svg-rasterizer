@@ -1000,6 +1000,7 @@ type guiValues struct {
 	ShouldKeepCanvasRatio bool
 	SuperSampleRate       int
 	TargetScale           float32
+	KeepSizeToTarget      bool
 }
 
 func createGui(r *rasterizer) {
@@ -1007,10 +1008,11 @@ func createGui(r *rasterizer) {
 	gui.JSGUI.Set("width", 300)
 
 	guiVals := guiValues{
-		CanvasWidth:     r.canvas.Get("width").Int(),
-		CanvasHeight:    r.canvas.Get("height").Int(),
-		SuperSampleRate: 1,
-		TargetScale:     100,
+		CanvasWidth:      r.canvas.Get("width").Int(),
+		CanvasHeight:     r.canvas.Get("height").Int(),
+		SuperSampleRate:  1,
+		TargetScale:      100,
+		KeepSizeToTarget: true,
 	}
 
 	rasterizerGui := gui.AddFolder("Rasterizer settings")
@@ -1025,8 +1027,9 @@ func createGui(r *rasterizer) {
 		r.Draw()
 	})
 
+	// TODO implmement target scale on change (Also change target w, h???)
 	rasterizerGui.Add(&guiVals, "TargetScale").Min(1).Max(1000).Step(0.1).Name("Target scale %")
-	// TODO implmement target scale on change
+	rasterizerGui.Add(&guiVals, "KeepSizeToTarget").Name("Adjust canvas size?")
 
 	widthHeightGui := gui.AddFolder("Canvas width and height")
 	widthHeightGui.Open()
