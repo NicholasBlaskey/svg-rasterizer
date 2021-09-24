@@ -604,18 +604,10 @@ func generateMipMaps(img image.Image) []mip {
 }
 
 func (s *Image) rasterize(r *rasterizer) {
-	// TODO Remove this, if using sampleBilinear on a lower mip this width needs
-	// to also be adjusted.
-	//s.Width = 64
-	//s.Height = s.Width
-
-	// Loop through all the pixels
-	// Then get the coordinate from texture space from screenspace?
-	// then implmeenet sampleNearest and sampleBiliniear
 	for x := s.X; x < s.X+s.Width; x++ {
 		for y := s.Y; y < s.Y+s.Height; y++ {
-			col := s.sampleNearest(s.mipMaps[0], float32(x), float32(y))
-			//col := s.sampleBilinear(s.mipMaps[0], float32(x), float32(y))
+			//col := s.sampleNearest(s.mipMaps[0], float32(x), float32(y))
+			col := s.sampleBilinear(s.mipMaps[0], float32(x), float32(y))
 
 			r.drawPixel(float32(x), float32(y), col)
 		}
@@ -726,7 +718,7 @@ func (r *rasterizer) SetSvg(filePath string) error {
 	// Calculate mip maps for all images.
 	loadImagesAndCreateMipMaps(r.svg)
 
-	r.sampleRate = 2
+	r.sampleRate = 1
 
 	r.Draw()
 
@@ -816,8 +808,6 @@ func (r *rasterizer) Draw() {
 		r.pixels[point+2] = b
 		r.pixels[point+3] = a
 	}
-	//fmt.Println(r.pixels)
-	//fmt.Println(len(r.pixels))
 
 	r.board.SetPixels(r.pixels)
 
@@ -826,10 +816,6 @@ func (r *rasterizer) Draw() {
 }
 
 func (s *Svg) rasterize(r *rasterizer) {
-	//fmt.Println("svg transform", r.svg.transformMatrix)
-
-	fmt.Println(r.width, r.height, r.heightPixels, r.widthPixels)
-
 	for _, rect := range s.Rects {
 		rect.transformMatrix = parseTransform(rect.Transform)
 		rect.transformMatrix = s.transformMatrix.Mul3(rect.transformMatrix)
@@ -907,12 +893,7 @@ type testType struct {
 func addSvgToGUI(gui *datGUI.GUI, path string, r *rasterizer, onSvgLoad func()) {
 	obj := testType{Fun: func() {
 		go func() {
-			fmt.Println("PRE", r.canvas.Get("width"), r.canvas.Get("height"))
-
 			r.SetSvg(path)
-
-			fmt.Println(r.canvas.Get("width"), r.canvas.Get("height"))
-
 			onSvgLoad()
 		}()
 	}}
@@ -964,20 +945,7 @@ func createSvgFolders(gui *datGUI.GUI, r *rasterizer, onSvgLoad func()) {
 	}
 }
 
-type guiValues struct {
-	CanvasWidth           int
-	CanvasHeight          int
-	ShouldKeepCanvasRatio bool
-}
-
-func createGui(r *rasterizer) {
-	gui := datGUI.New()
-
-	guiVals := guiValues{
-		CanvasWidth:  r.canvas.Get("width").Int(),
-		CanvasHeight: r.canvas.Get("height").Int(),
-	}
-
+func createWidthHeightGui(gui *datGUI.GUI, r *rasterizer, guiVals guiValues) func() {
 	var widthController, heightController *datGUI.Controller
 	widthChangeFunc := func() {
 		if guiVals.ShouldKeepCanvasRatio {
@@ -1023,6 +991,47 @@ func createGui(r *rasterizer) {
 		heightController.SetValue(h)
 		guiVals.ShouldKeepCanvasRatio = tmp
 	}
+	return onSvgLoad
+}
+
+type guiValues struct {
+	CanvasWidth           int
+	CanvasHeight          int
+	ShouldKeepCanvasRatio bool
+	SuperSampleRate       int
+	TargetScale           float32
+}
+
+func createGui(r *rasterizer) {
+	gui := datGUI.New()
+	gui.JSGUI.Set("width", 300)
+
+	guiVals := guiValues{
+		CanvasWidth:     r.canvas.Get("width").Int(),
+		CanvasHeight:    r.canvas.Get("height").Int(),
+		SuperSampleRate: 1,
+		TargetScale:     100,
+	}
+
+	rasterizerGui := gui.AddFolder("Rasterizer settings")
+	rasterizerGui.Open()
+	rasterizerGui.Add(&guiVals,
+		"SuperSampleRate").Min(1).Max(8).Name("Super sample rate").OnChange(func() {
+		if r.sampleRate == guiVals.SuperSampleRate {
+			return
+		}
+
+		r.sampleRate = guiVals.SuperSampleRate
+		r.Draw()
+	})
+
+	rasterizerGui.Add(&guiVals, "TargetScale").Min(1).Max(1000).Step(0.1).Name("Target scale %")
+	// TODO implmement target scale on change
+
+	widthHeightGui := gui.AddFolder("Canvas width and height")
+	widthHeightGui.Open()
+	onSvgLoad := createWidthHeightGui(widthHeightGui, r, guiVals)
+
 	createSvgFolders(gui, r, onSvgLoad)
 }
 
