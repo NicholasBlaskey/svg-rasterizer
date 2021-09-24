@@ -131,7 +131,7 @@ func (s *Rect) rasterize(r *rasterizer) {
 		return
 	}
 
-	// Otherwise have a full on rectangle.
+	// Otherwise we have a full on rectangle.
 	// Draw rectangle border.
 	w := s.Width * r.scale
 	h := s.Height * r.scale
@@ -185,7 +185,6 @@ func blendColors(col Color, red, g, b, a byte) (byte, byte, byte, byte) {
 
 // This draws a point which will then be anti aliased.
 func (r *rasterizer) drawPoint(x, y float32, col Color) {
-	// TODO is this width and height divide right?
 	xCoord := int(x * float32(r.widthPixels) / r.width)
 	yCoord := r.heightPixels - int(y*float32(r.heightPixels)/r.height)
 
@@ -326,7 +325,7 @@ func (s *Polyline) rasterize(r *rasterizer) {
 		xy := strings.Split(strings.Trim(p, "\n\r\t "), ",")
 		x, err1 := strconv.ParseFloat(xy[0], 32)
 		y, err2 := strconv.ParseFloat(xy[1], 32)
-		if err1 != nil || err2 != nil { // TODO figure out error handling
+		if err1 != nil || err2 != nil {
 			if err1 != nil {
 				panic(err1)
 			}
@@ -357,7 +356,7 @@ func (s *Circle) rasterize(r *rasterizer) {
 
 	cx := pointsFloat[0]
 	cy := pointsFloat[1]
-	radius := s.R * float32(r.sampleRate) // Times scale since we don't move x and y
+	radius := s.R * float32(r.sampleRate) * r.scale
 
 	col := parseColor(s.Fill)
 	minX, maxX := cx-radius, cx+radius
@@ -438,7 +437,6 @@ func parseTransform(trans string) mgl.Mat3 {
 }
 
 func (r *rasterizer) transform(points []float32, trans mgl.Mat3, isAliased bool) []float32 {
-	// TODO implmeent view transform
 	for i := 0; i < len(points); i += 2 {
 		xyz := mgl.Vec3{points[i], points[i+1], 1.0}
 
@@ -466,7 +464,7 @@ func (r *rasterizer) pointsToTriangles(in string,
 		xy := strings.Split(strings.Trim(p, "\n\r\t "), ",")
 		x, err1 := strconv.ParseFloat(xy[0], 32)
 		y, err2 := strconv.ParseFloat(xy[1], 32)
-		if err1 != nil || err2 != nil { // TODO figure out error handling
+		if err1 != nil || err2 != nil {
 			if err1 != nil {
 				panic(err1)
 			}
@@ -627,10 +625,10 @@ func generateMipMaps(img image.Image) []mip {
 }
 
 func (s *Image) rasterize(r *rasterizer) {
-	for x := s.X; x < s.X+s.Width; x++ {
-		for y := s.Y; y < s.Y+s.Height; y++ {
+	for x := int(float32(s.X) * r.scale); x < int(float32(s.X+s.Width)*r.scale); x++ {
+		for y := int(float32(s.Y) * r.scale); y < int(float32(s.Y+s.Height)*r.scale); y++ {
 			//col := s.sampleNearest(s.mipMaps[0], float32(x), float32(y))
-			col := s.sampleBilinear(s.mipMaps[0], float32(x), float32(y))
+			col := s.sampleBilinear(s.mipMaps[0], float32(x)/r.scale, float32(y)/r.scale)
 
 			r.drawPixel(float32(x), float32(y), col)
 		}
@@ -990,6 +988,7 @@ func createSvgFolders(gui *datGUI.GUI, r *rasterizer, onSvgLoad func()) {
 	for i, folder := range folderNames {
 		folderGUI := svgImagesGUI.AddFolder(folder)
 
+		//if folder == "alpha" {
 		if folder == "illustration" {
 			folderGUI.Open()
 		}
