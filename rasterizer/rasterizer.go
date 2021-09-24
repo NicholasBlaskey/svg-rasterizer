@@ -64,22 +64,26 @@ func parseColor(col string) Color {
 }
 
 type rasterizer struct {
-	board               *board.Board
-	svg                 *Svg
-	pixels              []byte
-	widthPixels         int
-	heightPixels        int
-	width               float32
-	height              float32
-	sampleRate          int
-	samplePixels        int
-	origWidthPixels     int
-	origHeightPixels    int
-	origWidth           float32
-	origHeight          float32
-	pointsToFill        []int
-	colorOfPointsToFill []Color
-	canvas              js.Value
+	board                *board.Board
+	svg                  *Svg
+	pixels               []byte
+	widthPixels          int
+	heightPixels         int
+	width                float32
+	height               float32
+	sampleRate           int
+	samplePixels         int
+	origWidthPixels      int
+	origHeightPixels     int
+	origWidth            float32
+	origHeight           float32
+	unscaledWidthPixels  int
+	unscaledHeightPixels int
+	unscaledWidth        float32
+	unscaledHeight       float32
+	pointsToFill         []int
+	colorOfPointsToFill  []Color
+	canvas               js.Value
 }
 
 type Svg struct {
@@ -737,7 +741,28 @@ func (r *rasterizer) SetSvg(filePath string) error {
 
 	r.Draw()
 
+	r.unscaledWidth = r.width
+	r.unscaledHeight = r.height
+	r.unscaledWidthPixels = r.widthPixels
+	r.unscaledHeightPixels = r.heightPixels
+
 	return nil
+}
+
+func (r *rasterizer) SetTargetScale(scale float32) {
+	fmt.Println(scale)
+
+	r.widthPixels = int(float32(r.unscaledWidthPixels) * scale)
+	r.heightPixels = int(float32(r.unscaledHeightPixels) * scale)
+	r.width = r.unscaledWidth * scale
+	r.height = r.unscaledHeight * scale
+
+	// TODO set transform
+	r.board.SetWidthHeight(r.widthPixels, r.heightPixels)
+	r.canvas.Set("width", r.widthPixels)
+	r.canvas.Set("height", r.heightPixels)
+
+	r.Draw()
 }
 
 func loadImagesAndCreateMipMaps(curSvg *Svg) {
@@ -1050,7 +1075,11 @@ func createGui(r *rasterizer) {
 	})
 
 	// TODO implmement target scale on change (Also change target w, h???)
-	rasterizerGui.Add(&guiVals, "TargetScale").Min(1).Max(1000).Step(0.1).Name("Target scale %")
+	// ALSO make this onChangeFinish
+	rasterizerGui.Add(&guiVals, "TargetScale").Min(1).Max(200).Step(
+		0.1).Name("Target scale %").OnChange(func() {
+		r.SetTargetScale(guiVals.TargetScale / 100.0)
+	})
 	rasterizerGui.Add(&guiVals, "KeepSizeToTarget").Name("Adjust canvas size?")
 
 	widthHeightGui := gui.AddFolder("Canvas width and height")
@@ -1079,11 +1108,11 @@ func main() {
 	//r, err := New(canvas, "/svg/alpha/04_scotty.svg")
 	//r, err := New(canvas, "/svg/alpha/05_sphere.svg")
 
-	r, err := New(canvas, getUrl("/svg/illustration/01_sketchpad.svg"))
+	//r, err := New(canvas, getUrl("/svg/illustration/01_sketchpad.svg"))
 	//r, err := New(canvas, "/svg/illustration/02_hexes.svg")
 	//r, err := New(canvas, "/svg/illustration/03_circle.svg")
 	//r, err := New(canvas, "/svg/illustration/04_sun.svg")
-	//r, err := New(canvas, "/svg/illustration/05_lion.svg")
+	r, err := New(canvas, "/svg/illustration/05_lion.svg")
 	//r, err := New(canvas, "/svg/illustration/06_sphere.svg")
 	//r, err := New(canvas, "/svg/illustration/07_lines.svg")
 	//r, err := New(canvas, "/svg/illustration/08_monkeytree.svg")
