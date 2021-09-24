@@ -1,8 +1,6 @@
 package board
 
 import (
-	"fmt"
-
 	"github.com/nicholasblaskey/webgl/webgl"
 	"syscall/js"
 
@@ -67,13 +65,9 @@ func New(canvas js.Value) (*Board, error) {
 	b.initPixelInspector()
 	b.initPixelInspectorOffsets()
 
-	/*
-		b.SetColors(mgl.Vec4{6 / 255.0, 35 / 255.0, 41 / 255.0, 1.0},
-			mgl.Vec4{140 / 255.0, 222 / 255.0, 148 / 255.0, 1.0})
-	*/
 	b.gl.ClearColor(0.3, 0.5, 0.3, 1.0)
 
-	b.draw()
+	b.Draw()
 
 	return b, nil
 }
@@ -86,7 +80,7 @@ func (b *Board) SetWidthHeight(w, h int) {
 
 func (b *Board) EnablePixelInspector(shouldTurnOn bool) {
 	b.pixelInspectorOn = shouldTurnOn
-	b.draw()
+	b.Draw()
 }
 
 func (b *Board) initPixelInspector() {
@@ -97,7 +91,10 @@ func (b *Board) initPixelInspector() {
 			texelSizeY := 1.0 / float32(b.Height)
 
 			x, y := getXAndYFromEvent(args[0])
-			b.mouseX, b.mouseY = x, y
+			x = (x / float32(b.canvas.Get("width").Float())) * float32(b.Width)
+			y = (y / float32(b.canvas.Get("height").Float())) * float32(b.Height)
+
+			//b.mouseX, b.mouseY = x, y
 
 			// Add in a small value to ensure we are near the center of a pixel
 			// not on the edge of a pixel.
@@ -105,7 +102,7 @@ func (b *Board) initPixelInspector() {
 			b.mouseY = (1.0 - y*texelSizeY + texelSizeY/2 - 0.5) * 2.0
 
 			if b.pixelInspectorOn {
-				b.draw()
+				b.Draw()
 			}
 
 			return nil
@@ -120,8 +117,6 @@ func (b *Board) initPixelInspectorOffsets() {
 	b.offsets = []float32{}
 	texelSizeX, texelSizeY := 1.0/float32(b.Width), 1.0/float32(b.Height)
 	centerX, centerY := b.numSquares/2, b.numSquares/2
-
-	fmt.Println(texelSizeX, texelSizeY, b.Width, b.Height)
 
 	for y := 0; y < b.numSquares; y++ {
 		for x := 0; x < b.numSquares; x++ {
@@ -199,7 +194,7 @@ func (b *Board) applyTranslation(xStart, yStart, x, y float32) {
 	b.translation = b.translation.Add(mgl.Vec2{x - xStart, yStart - y}.Mul(b.TranslationSpeed))
 	b.setTranslation()
 
-	b.draw()
+	b.Draw()
 }
 
 func (b *Board) ResetView() {
@@ -225,7 +220,7 @@ func (b *Board) initZoomListener() {
 			b.zoomValue += b.ZoomFactor
 		}
 		b.setZoom()
-		b.draw()
+		b.Draw()
 		return nil
 	})
 
@@ -344,7 +339,7 @@ func (b *Board) setTextureData(data []byte) {
 
 func (b *Board) SetPixels(data []byte) {
 	b.setTextureData(data)
-	b.draw()
+	b.Draw()
 }
 
 func (b *Board) initTexCoords() {
@@ -409,20 +404,7 @@ func (b *Board) initPositions() {
 	b.pixelPosBuff.BindData(b.gl, b.pixelPos)
 }
 
-/*
-func (b *Board) SetColors(background, foreground mgl.Vec4) {
-	b.gl.UseProgram(b.program)
-	util.SetVec4(b.gl, b.program, "background", background)
-	util.SetVec4(b.gl, b.program, "foreground", foreground)
-
-	b.gl.UseProgram(b.pixelInspectorProgram)
-	util.SetVec4(b.gl, b.pixelInspectorProgram, "background", background)
-	util.SetVec4(b.gl, b.pixelInspectorProgram, "foreground", foreground)
-
-}
-*/
-
-func (b *Board) draw() {
+func (b *Board) Draw() {
 	// Draw the texture.
 	w, h := b.canvas.Get("width").Int(), b.canvas.Get("height").Int()
 	b.gl.Viewport(0.0, 0.0, w, h)
