@@ -119,15 +119,17 @@ func (s *Rect) rasterize(r *rasterizer) {
 	}
 
 	// If either width or height is 0 or 1 assume we have a single point.
+	transformed := r.transform([]float32{s.X, s.Y}, s.transformMatrix, false)
+	x, y := transformed[0], transformed[1]
 	if s.Width == 0.0 || s.Height == 0.0 || (s.Width == 1.0 && s.Height == 1.0) {
-		r.drawPixel(s.X, s.Y, col)
+		r.drawPixel(x, y, col)
 		return
 	}
 
 	// Otherwise have a full on rectangle.
-	transformed := r.transform([]float32{s.X, s.Y}, s.transformMatrix)
-	x, y := transformed[0], transformed[1] //, transformed[2], transformed[3]
-	w := s.Width * float32(r.sampleRate)
+	x *= float32(r.sampleRate)           // TODO times the scale
+	y *= float32(r.sampleRate)           // TODO times the scale
+	w := s.Width * float32(r.sampleRate) // TODO Times the scale
 	h := s.Height * float32(r.sampleRate)
 
 	// Draw inside of rectangle.
@@ -213,11 +215,13 @@ func (r *rasterizer) drawPixel(x, y float32, col Color) {
 }
 
 type Line struct {
-	X1   float32 `xml:"x1,attr"`
-	Y1   float32 `xml:"y1,attr"`
-	X2   float32 `xml:"x2,attr"`
-	Y2   float32 `xml:"y2,attr"`
-	Fill string  `xml:"stroke,attr"`
+	X1              float32 `xml:"x1,attr"`
+	Y1              float32 `xml:"y1,attr"`
+	X2              float32 `xml:"x2,attr"`
+	Y2              float32 `xml:"y2,attr"`
+	Fill            string  `xml:"stroke,attr"`
+	Transform       string  `xml:"transform,attr"`
+	transformMatrix mgl.Mat3
 }
 
 func round(x float32) float32 {
@@ -293,7 +297,9 @@ func (r *rasterizer) drawLine(x0, y0, x1, y1 float32, col Color) {
 
 func (s *Line) rasterize(r *rasterizer) {
 	col := parseColor(s.Fill)
-	r.drawLine(s.X1, s.Y1, s.X2, s.Y2, col)
+
+	pointsFloat := r.transform([]float32{s.X1, s.Y1, s.X2, s.Y2}, s.transformMatrix, false)
+	r.drawLine(pointsFloat[0], pointsFloat[1], pointsFloat[2], pointsFloat[3], col)
 }
 
 type Polyline struct {
@@ -322,27 +328,28 @@ func (s *Polyline) rasterize(r *rasterizer) {
 		pointsFloat = append(pointsFloat, float32(x), float32(y))
 	}
 
-	pointsFloat = r.transform(pointsFloat, s.transformMatrix)
-
+	pointsFloat = r.transform(pointsFloat, s.transformMatrix, false)
 	for i := 0; i < len(pointsFloat)/2-1; i++ {
-		r.drawLine(pointsFloat[i*2]/float32(r.sampleRate),
-			pointsFloat[i*2+1]/float32(r.sampleRate),
-			pointsFloat[(i+1)*2]/float32(r.sampleRate),
-			pointsFloat[(i+1)*2+1]/float32(r.sampleRate), col)
+		r.drawLine(pointsFloat[i*2], pointsFloat[i*2+1],
+			pointsFloat[(i+1)*2], pointsFloat[(i+1)*2+1], col)
 	}
 }
 
 type Circle struct {
-	Cx   float32 `xml:"cx,attr"`
-	Cy   float32 `xml:"cy,attr"`
-	R    float32 `xml:"r,attr"`
-	Fill string  `xml:'fill,attr"`
+	Cx              float32 `xml:"cx,attr"`
+	Cy              float32 `xml:"cy,attr"`
+	R               float32 `xml:"r,attr"`
+	Fill            string  `xml:'fill,attr"`
+	Transform       string  `xml:"transform,attr"`
+	transformMatrix mgl.Mat3
 }
 
 func (s *Circle) rasterize(r *rasterizer) {
-	cx := s.Cx * float32(r.sampleRate)
-	cy := s.Cy * float32(r.sampleRate)
-	radius := s.R * float32(r.sampleRate)
+	pointsFloat := r.transform([]float32{s.Cx, s.Cy}, s.transformMatrix, true)
+
+	cx := pointsFloat[0]
+	cy := pointsFloat[1]
+	radius := s.R * float32(r.sampleRate) // Times scale since we don't move x and y
 
 	col := parseColor(s.Fill)
 	minX, maxX := cx-radius, cx+radius
@@ -359,13 +366,13 @@ func (s *Circle) rasterize(r *rasterizer) {
 }
 
 type Polygon struct {
-	Fill            string `xml:"fill,attr"`
-	Stroke          string `xml:"stroke,attr"`
-	Points          string `xml:"points,attr"`
-	Transform       string `xml:"transform,attr"`
-	transformMatrix mgl.Mat3
+	Fill            string  `xml:"fill,attr"`
+	Stroke          string  `xml:"stroke,attr"`
+	Points          string  `xml:"points,attr"`
 	FillOpacity     float32 `xml:"fill-opacity,attr"`
 	StrokeOpacity   float32 `xml:"stroke-opacity,attr"`
+	Transform       string  `xml:"transform,attr"`
+	transformMatrix mgl.Mat3
 }
 
 func parseTransform(trans string) mgl.Mat3 {
@@ -422,14 +429,20 @@ func parseTransform(trans string) mgl.Mat3 {
 	return mgl.Ident3()
 }
 
-func (r *rasterizer) transform(points []float32, trans mgl.Mat3) []float32 {
+func (r *rasterizer) transform(points []float32, trans mgl.Mat3, isAliased bool) []float32 {
+	// TODO implmeent view transform
 	for i := 0; i < len(points); i += 2 {
 		xyz := mgl.Vec3{points[i], points[i+1], 1.0}
 
 		transformed := trans.Mul3x1(xyz)
 
-		points[i] = transformed[0] * float32(r.sampleRate)
-		points[i+1] = transformed[1] * float32(r.sampleRate)
+		sampleRate := float32(r.sampleRate)
+		if !isAliased {
+			sampleRate = 1.0
+		}
+
+		points[i] = transformed[0] * sampleRate
+		points[i+1] = transformed[1] * sampleRate
 	}
 
 	return points
@@ -454,7 +467,7 @@ func (r *rasterizer) pointsToTriangles(in string,
 		pointsFloat = append(pointsFloat, float32(x), float32(y))
 	}
 
-	pointsFloat = r.transform(pointsFloat, transformation)
+	pointsFloat = r.transform(pointsFloat, transformation, true)
 
 	triangles := triangulate.Triangulate(pointsFloat)
 	for _, t := range triangles {
@@ -533,12 +546,14 @@ func (s *Polygon) boundingBoxApproach(r *rasterizer) {
 }
 
 type Image struct {
-	X       int    `xml:"x,attr"`
-	Y       int    `xml:"y,attr"`
-	Width   int    `xml:"width,attr"`
-	Height  int    `xml:"height,attr"`
-	Href    string `xml:"href,attr"` // Assume all images of base64 png encoded
-	mipMaps []mip
+	X               int    `xml:"x,attr"`
+	Y               int    `xml:"y,attr"`
+	Width           int    `xml:"width,attr"`
+	Height          int    `xml:"height,attr"`
+	Href            string `xml:"href,attr"` // Assume all images of base64 png encoded
+	mipMaps         []mip
+	Transform       string `xml:"transform,attr"`
+	transformMatrix mgl.Mat3
 	//imageSizeX int    // Width of image loaded
 	//imageSizeY int    // Height of image laoded
 }
@@ -824,7 +839,6 @@ func (s *Svg) rasterize(r *rasterizer) {
 	}
 
 	for _, polyline := range s.Polylines {
-
 		polyline.transformMatrix = parseTransform(polyline.Transform)
 		polyline.transformMatrix = s.transformMatrix.Mul3(polyline.transformMatrix)
 
@@ -832,10 +846,16 @@ func (s *Svg) rasterize(r *rasterizer) {
 	}
 
 	for _, line := range s.Lines {
+		line.transformMatrix = parseTransform(line.Transform)
+		line.transformMatrix = s.transformMatrix.Mul3(line.transformMatrix)
+
 		line.rasterize(r)
 	}
 
 	for _, circle := range s.Circles {
+		circle.transformMatrix = parseTransform(circle.Transform)
+		circle.transformMatrix = s.transformMatrix.Mul3(circle.transformMatrix)
+
 		circle.rasterize(r)
 	}
 
@@ -847,7 +867,6 @@ func (s *Svg) rasterize(r *rasterizer) {
 	}
 
 	for _, group := range s.Groups {
-		// Set transformation matrix for the group.
 		group.transformMatrix = parseTransform(group.Transform)
 		group.transformMatrix = s.transformMatrix.Mul3(group.transformMatrix)
 
@@ -855,6 +874,9 @@ func (s *Svg) rasterize(r *rasterizer) {
 	}
 
 	for _, image := range s.Images {
+		image.transformMatrix = parseTransform(image.Transform)
+		image.transformMatrix = s.transformMatrix.Mul3(image.transformMatrix)
+
 		image.rasterize(r)
 	}
 }
