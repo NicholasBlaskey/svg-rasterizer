@@ -688,7 +688,6 @@ func New(canvas js.Value, filePath string) (*rasterizer, error) {
 	r.board = b
 
 	r.SetSvg(filePath)
-
 	b.EnablePixelInspector(true)
 
 	return r, nil
@@ -989,6 +988,7 @@ func createSvgFolders(gui *datGUI.GUI, r *rasterizer, onSvgLoad func()) {
 	}
 }
 
+/*
 func createWidthHeightGui(gui *datGUI.GUI, r *rasterizer, guiVals guiValues) func() {
 	var widthController, heightController *datGUI.Controller
 	widthChangeFunc := func() {
@@ -1037,16 +1037,14 @@ func createWidthHeightGui(gui *datGUI.GUI, r *rasterizer, guiVals guiValues) fun
 	}
 	return onSvgLoad
 }
+*/
 
 type guiValues struct {
-	CanvasWidth           int
-	CanvasHeight          int
-	ShouldKeepCanvasRatio bool
-	SuperSampleRate       int
-	TargetScale           float32
-	KeepSizeToTarget      bool
-	PixelInspectorOn      bool
-	PixelInspectorScale   float32
+	SuperSampleRate     int
+	TargetScale         float32
+	CanvasScale         float32
+	PixelInspectorOn    bool
+	PixelInspectorScale float32
 }
 
 func createGui(r *rasterizer) {
@@ -1054,15 +1052,14 @@ func createGui(r *rasterizer) {
 	gui.JSGUI.Set("width", 300)
 
 	guiVals := guiValues{
-		CanvasWidth:         r.canvas.Get("width").Int(),
-		CanvasHeight:        r.canvas.Get("height").Int(),
 		SuperSampleRate:     1,
 		TargetScale:         100,
-		KeepSizeToTarget:    true,
+		CanvasScale:         100,
 		PixelInspectorOn:    true,
 		PixelInspectorScale: 30,
 	}
 
+	// Pixel inspector GUI
 	pixelGui := gui.AddFolder("Pixel inspector")
 	pixelGui.Open()
 	pixelGui.Add(&guiVals, "PixelInspectorOn").Name("Inspector on?").OnChange(func() {
@@ -1070,6 +1067,7 @@ func createGui(r *rasterizer) {
 	})
 	pixelGui.Add(&guiVals, "PixelInspectorScale").Min(1).Max(100).Name("Inspector size")
 
+	// Rasterizer GUI
 	rasterizerGui := gui.AddFolder("Rasterizer settings")
 	rasterizerGui.Open()
 	rasterizerGui.Add(&guiVals,
@@ -1082,17 +1080,33 @@ func createGui(r *rasterizer) {
 		r.Draw()
 	})
 
-	// TODO implmement target scale on change (Also change target w, h???)
 	rasterizerGui.Add(&guiVals, "TargetScale").Min(1).Max(200).Step(
 		0.1).Name("Target scale %").OnChange(func() {
 		r.SetTargetScale(guiVals.TargetScale / 100.0)
 	})
-	rasterizerGui.Add(&guiVals, "KeepSizeToTarget").Name("Adjust canvas size?")
 
-	widthHeightGui := gui.AddFolder("Canvas width and height")
-	widthHeightGui.Open()
-	onSvgLoad := createWidthHeightGui(widthHeightGui, r, guiVals)
+	setCanvasToScale := func() {
+		r.canvas.Set("width", guiVals.CanvasScale/100.0*float32(r.origWidthPixels))
+		r.canvas.Set("height", guiVals.CanvasScale/100.0*float32(r.origHeightPixels))
+		r.board.Draw()
+	}
+	canvasScaleController := rasterizerGui.Add(&guiVals,
+		"CanvasScale").Min(1).Max(500).Step(
+		0.1).Name("Canvas scale %").OnChange(func() {
+		setCanvasToScale()
+	})
 
+	/*
+		widthHeightGui := gui.AddFolder("Canvas width and height")
+		widthHeightGui.Open()
+		onSvgLoad := createWidthHeightGui(widthHeightGui, r, guiVals)
+	*/
+
+	onSvgLoad := func() {
+		canvasScaleController.SetValue(100)
+	}
+
+	// SVG options GUI
 	createSvgFolders(gui, r, onSvgLoad)
 }
 
