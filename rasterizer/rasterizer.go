@@ -752,10 +752,7 @@ func (r *rasterizer) SetTargetScale(scale float32) {
 	r.width = r.unscaledWidth * scale
 	r.height = r.unscaledHeight * scale
 
-	// TODO set transform
 	r.board.SetWidthHeight(r.widthPixels, r.heightPixels)
-	r.canvas.Set("width", r.widthPixels)
-	r.canvas.Set("height", r.heightPixels)
 
 	r.Draw()
 }
@@ -1080,30 +1077,28 @@ func createGui(r *rasterizer) {
 		r.Draw()
 	})
 
-	rasterizerGui.Add(&guiVals, "TargetScale").Min(1).Max(200).Step(
-		0.1).Name("Target scale %").OnChange(func() {
-		r.SetTargetScale(guiVals.TargetScale / 100.0)
-	})
-
-	setCanvasToScale := func() {
-		r.canvas.Set("width", guiVals.CanvasScale/100.0*float32(r.origWidthPixels))
-		r.canvas.Set("height", guiVals.CanvasScale/100.0*float32(r.origHeightPixels))
+	setCanvasScale := func() {
+		scaleVal := (guiVals.CanvasScale / 100.0) * (guiVals.TargetScale / 100.0)
+		r.canvas.Set("width", scaleVal*float32(r.unscaledWidthPixels))
+		r.canvas.Set("height", scaleVal*float32(r.unscaledHeightPixels))
 		r.board.Draw()
 	}
+	targetScaleController := rasterizerGui.Add(&guiVals,
+		"TargetScale").Min(1).Max(200).Step(
+		0.1).Name("Target scale %").OnChange(func() {
+		r.SetTargetScale(guiVals.TargetScale / 100.0)
+
+		setCanvasScale()
+	})
 	canvasScaleController := rasterizerGui.Add(&guiVals,
 		"CanvasScale").Min(1).Max(500).Step(
 		0.1).Name("Canvas scale %").OnChange(func() {
-		setCanvasToScale()
+		setCanvasScale()
 	})
-
-	/*
-		widthHeightGui := gui.AddFolder("Canvas width and height")
-		widthHeightGui.Open()
-		onSvgLoad := createWidthHeightGui(widthHeightGui, r, guiVals)
-	*/
 
 	onSvgLoad := func() {
 		canvasScaleController.SetValue(100)
+		targetScaleController.SetValue(100)
 	}
 
 	// SVG options GUI
