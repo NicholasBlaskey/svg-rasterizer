@@ -29,6 +29,7 @@ type Board struct {
 	pixelPosBuff          *util.Buffer
 	pixelInspectorProgram *webgl.Program
 	pixelInspectorOn      bool
+	inspectorSize         float32
 	mouseX                float32
 	mouseY                float32
 	numSquares            int       // numSquares x numSquares squares in pixel inspector
@@ -50,6 +51,7 @@ func New(canvas js.Value) (*Board, error) {
 		numSquares: 15,
 		//Width:      12, Height: 12,
 		Width: canvas.Get("width").Int(), Height: canvas.Get("height").Int(),
+		inspectorSize: 1 / 3.0,
 	}
 
 	err = b.initShaders()
@@ -404,6 +406,11 @@ func (b *Board) initPositions() {
 	b.pixelPosBuff.BindData(b.gl, b.pixelPos)
 }
 
+func (b *Board) SetInspectorSize(inspectorSize float32) {
+	b.inspectorSize = inspectorSize
+	b.Draw()
+}
+
 func (b *Board) Draw() {
 	// Draw the texture.
 	w, h := b.canvas.Get("width").Int(), b.canvas.Get("height").Int()
@@ -422,11 +429,12 @@ func (b *Board) Draw() {
 	}
 
 	// Draw the pixel inpector
-	inspectorWidth, inspectorHeight := w/3, h/3
+	inspectorWidth := int(float32(w) * b.inspectorSize)
+	inspectorHeight := int(float32(h) * b.inspectorSize)
 	if w < h { // Correct for aspect ratio to ensure out pixel inspector is a square
-		inspectorWidth = inspectorHeight
-	} else {
 		inspectorHeight = inspectorWidth
+	} else {
+		inspectorWidth = inspectorHeight
 	}
 
 	b.gl.Viewport(w-inspectorWidth, h-inspectorHeight, inspectorWidth, inspectorHeight)

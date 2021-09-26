@@ -1062,7 +1062,10 @@ func createGui(r *rasterizer) {
 	pixelGui.Add(&guiVals, "PixelInspectorOn").Name("Inspector on?").OnChange(func() {
 		r.board.EnablePixelInspector(guiVals.PixelInspectorOn)
 	})
-	pixelGui.Add(&guiVals, "PixelInspectorScale").Min(1).Max(100).Name("Inspector size")
+	pixelGui.Add(&guiVals, "PixelInspectorScale").Min(5).Max(
+		80).Name("Inspector size").OnChange(func() {
+		r.board.SetInspectorSize(guiVals.PixelInspectorScale / 100.0)
+	})
 
 	// Rasterizer GUI
 	rasterizerGui := gui.AddFolder("Rasterizer settings")
