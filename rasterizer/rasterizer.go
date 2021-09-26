@@ -689,16 +689,7 @@ func New(canvas js.Value, filePath string) (*rasterizer, error) {
 
 	r.SetSvg(filePath)
 
-	pixelInspectorOn := false
-	js.Global().Call("addEventListener", "keydown", js.FuncOf(
-		func(this js.Value, args []js.Value) interface{} {
-			if args[0].Get("key").String() == "z" {
-				pixelInspectorOn = !pixelInspectorOn
-				b.EnablePixelInspector(pixelInspectorOn)
-			}
-
-			return nil
-		}))
+	b.EnablePixelInspector(true)
 
 	return r, nil
 }
@@ -1054,6 +1045,8 @@ type guiValues struct {
 	SuperSampleRate       int
 	TargetScale           float32
 	KeepSizeToTarget      bool
+	PixelInspectorOn      bool
+	PixelInspectorScale   float32
 }
 
 func createGui(r *rasterizer) {
@@ -1061,12 +1054,21 @@ func createGui(r *rasterizer) {
 	gui.JSGUI.Set("width", 300)
 
 	guiVals := guiValues{
-		CanvasWidth:      r.canvas.Get("width").Int(),
-		CanvasHeight:     r.canvas.Get("height").Int(),
-		SuperSampleRate:  1,
-		TargetScale:      100,
-		KeepSizeToTarget: true,
+		CanvasWidth:         r.canvas.Get("width").Int(),
+		CanvasHeight:        r.canvas.Get("height").Int(),
+		SuperSampleRate:     1,
+		TargetScale:         100,
+		KeepSizeToTarget:    true,
+		PixelInspectorOn:    true,
+		PixelInspectorScale: 30,
 	}
+
+	pixelGui := gui.AddFolder("Pixel inspector")
+	pixelGui.Open()
+	pixelGui.Add(&guiVals, "PixelInspectorOn").Name("Inspector on?").OnChange(func() {
+		r.board.EnablePixelInspector(guiVals.PixelInspectorOn)
+	})
+	pixelGui.Add(&guiVals, "PixelInspectorScale").Min(1).Max(100).Name("Inspector size")
 
 	rasterizerGui := gui.AddFolder("Rasterizer settings")
 	rasterizerGui.Open()
@@ -1081,7 +1083,6 @@ func createGui(r *rasterizer) {
 	})
 
 	// TODO implmement target scale on change (Also change target w, h???)
-	// ALSO make this onChangeFinish
 	rasterizerGui.Add(&guiVals, "TargetScale").Min(1).Max(200).Step(
 		0.1).Name("Target scale %").OnChange(func() {
 		r.SetTargetScale(guiVals.TargetScale / 100.0)
