@@ -411,6 +411,14 @@ func (b *Board) SetInspectorSize(inspectorSize float32) {
 	b.Draw()
 }
 
+func (b *Board) SetWidthHeightPixelInspector(n int) {
+	b.numSquares = n
+
+	b.initPositions()
+	b.initPixelInspectorOffsets()
+	b.Draw()
+}
+
 func (b *Board) Draw() {
 	// Draw the texture.
 	w, h := b.canvas.Get("width").Int(), b.canvas.Get("height").Int()

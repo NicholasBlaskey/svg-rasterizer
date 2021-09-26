@@ -985,63 +985,13 @@ func createSvgFolders(gui *datGUI.GUI, r *rasterizer, onSvgLoad func()) {
 	}
 }
 
-/*
-func createWidthHeightGui(gui *datGUI.GUI, r *rasterizer, guiVals guiValues) func() {
-	var widthController, heightController *datGUI.Controller
-	widthChangeFunc := func() {
-		if guiVals.ShouldKeepCanvasRatio {
-			aspectRatio := float32(r.origWidthPixels) / float32(r.origHeightPixels)
-			guiVals.CanvasHeight = int(float32(guiVals.CanvasWidth) * (1.0 / aspectRatio))
-
-			// Hack here to prevent us from going in a infinte loop of calling
-			// the change function over and over again. So we can turn
-			// of the change function recursion with this flag then turn it back on.
-			guiVals.ShouldKeepCanvasRatio = false
-			heightController.SetValue(guiVals.CanvasHeight)
-			guiVals.ShouldKeepCanvasRatio = true
-		}
-		r.canvas.Set("width", guiVals.CanvasWidth)
-		r.canvas.Set("height", guiVals.CanvasHeight)
-
-		r.board.Draw()
-	}
-	heightChangeFunc := func() {
-		if guiVals.ShouldKeepCanvasRatio {
-			aspectRatio := float32(r.origWidthPixels) / float32(r.origHeightPixels)
-			guiVals.CanvasWidth = int(float32(guiVals.CanvasHeight) * (aspectRatio))
-			widthController.SetValue(guiVals.CanvasWidth)
-		}
-		r.canvas.Set("width", guiVals.CanvasWidth)
-		r.canvas.Set("height", guiVals.CanvasHeight)
-
-		r.board.Draw()
-	}
-
-	widthController = gui.Add(&guiVals,
-		"CanvasWidth").Step(1).Min(50).Max(2000).OnChange(widthChangeFunc)
-	heightController = gui.Add(&guiVals,
-		"CanvasHeight").Step(1).Min(50).Max(2000).OnChange(heightChangeFunc)
-	gui.Add(&guiVals, "ShouldKeepCanvasRatio").Name("Keep aspect?").OnChange(widthChangeFunc)
-
-	onSvgLoad := func() {
-		w, h := r.canvas.Get("width").Int(), r.canvas.Get("height").Int()
-		tmp := guiVals.ShouldKeepCanvasRatio
-		guiVals.ShouldKeepCanvasRatio = false
-
-		widthController.SetValue(w)
-		heightController.SetValue(h)
-		guiVals.ShouldKeepCanvasRatio = tmp
-	}
-	return onSvgLoad
-}
-*/
-
 type guiValues struct {
-	SuperSampleRate     int
-	TargetScale         float32
-	CanvasScale         float32
-	PixelInspectorOn    bool
-	PixelInspectorScale float32
+	SuperSampleRate         int
+	TargetScale             float32
+	CanvasScale             float32
+	WidthHeightPixelInspect int
+	PixelInspectorOn        bool
+	PixelInspectorScale     float32
 }
 
 func createGui(r *rasterizer) {
@@ -1049,11 +999,12 @@ func createGui(r *rasterizer) {
 	gui.JSGUI.Set("width", 300)
 
 	guiVals := guiValues{
-		SuperSampleRate:     1,
-		TargetScale:         100,
-		CanvasScale:         100,
-		PixelInspectorOn:    true,
-		PixelInspectorScale: 30,
+		SuperSampleRate:         1,
+		TargetScale:             100,
+		CanvasScale:             100,
+		PixelInspectorOn:        true,
+		PixelInspectorScale:     30,
+		WidthHeightPixelInspect: 25,
 	}
 
 	// Pixel inspector GUI
@@ -1065,6 +1016,10 @@ func createGui(r *rasterizer) {
 	pixelGui.Add(&guiVals, "PixelInspectorScale").Min(5).Max(
 		80).Name("Inspector size").OnChange(func() {
 		r.board.SetInspectorSize(guiVals.PixelInspectorScale / 100.0)
+	})
+	pixelGui.Add(&guiVals, "WidthHeightPixelInspect").Min(1).Max(
+		100).Name("Width Height (px)").OnChange(func() {
+		r.board.SetWidthHeightPixelInspector(guiVals.WidthHeightPixelInspect)
 	})
 
 	// Rasterizer GUI
